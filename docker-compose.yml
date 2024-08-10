@@ -1,0 +1,18 @@
+version: '3'
+services:
+  server:
+    image: tmitchell1234/grid-aware-server
+    environment:
+      DATABASE_URL: "postgres://postgres:gridaware@localhost:5435/gridaware"
+    networks:
+      - shared-server-network
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+
+networks:
+  shared-server-network:
+    external:
+      name: shared-server-network
