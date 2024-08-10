@@ -10,6 +10,7 @@
                             LIBRARY (CRATE) IMPORTS
 ============================================================================
 */
+use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::{ Utc, Duration };
 use dotenvy::dotenv;
@@ -120,6 +121,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
             .route("/", web::post().to(index))
             .route("/echo", web::post().to(echo))
