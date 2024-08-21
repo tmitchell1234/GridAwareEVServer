@@ -100,15 +100,14 @@ async fn echo(params: web::Json<JsonPackage>) -> impl Responder {
 */
 async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParams>) -> impl Responder
 {
-    // let pass_str: &str = params.get_password_str();
-
     let hashed_password = hash_password(&params.user_password());
 
     let result = sqlx::query!(
         r#"
-        INSERT INTO Users (user_email, user_password, user_first_name, user_last_name, user_organization)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO Users (user_type, user_email, user_password, user_first_name, user_last_name, user_organization)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
+        params.user_type(),
         params.user_email(),
         hashed_password,
         params.user_first_name(),
@@ -136,8 +135,6 @@ async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>)
     match get_user_with_credentials(pool.as_ref(), params.user_email(), &hashed_password).await
     {
         Ok(user) => {
-            // println!("Found user: {:?}", user);
-
             // create and return JWT
             let return_jwt = create_jwt(&user);
             // println!("Generated JWT = {}", return_jwt);
@@ -160,7 +157,7 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
 {
     let result = sqlx::query_as!(
         User,
-        "SELECT user_email, user_first_name, user_last_name, user_organization FROM users WHERE user_email = $1 AND user_password = $2",
+        "SELECT user_type, user_email, user_first_name, user_last_name, user_organization FROM users WHERE user_email = $1 AND user_password = $2",
         user_email,
         hashed_password
     )

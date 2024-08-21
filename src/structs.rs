@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User
 {
+    pub user_type: String,
     pub user_email: String,
     pub user_first_name: Option<String>,
     pub user_last_name: Option<String>,
@@ -51,7 +52,8 @@ pub struct JsonPackage // for a JSON object with a single string, used for testi
 
 #[derive(Deserialize)]
 pub struct NewUserParams // for user_add endpoint
-{ 
+{
+    user_type: String,
     user_email: String,
     user_password: String,
     user_first_name: String,
@@ -61,6 +63,7 @@ pub struct NewUserParams // for user_add endpoint
 
 impl NewUserParams
 {
+    pub fn user_type(&self) -> &str { &self.user_type }
     pub fn user_email(&self) -> &str { &self.user_email }
     pub fn user_password(&self) -> &str { &self.user_password }
     pub fn user_first_name(&self) -> &str { &self.user_first_name }
