@@ -1,9 +1,8 @@
-version: '3'
 services:
   server:
     image: tmitchell1234/grid-aware-server
     environment:
-      DATABASE_URL: "postgres://postgres:gridaware@localhost:5435/gridaware"
+      DATABASE_URL: postgres://postgres:gridaware@localhost:5435/gridaware
     networks:
       - shared-server-network
     build:
@@ -14,5 +13,5 @@ services:
 
 networks:
   shared-server-network:
-    external:
-      name: shared-server-network
+    driver: bridge
+    external: true

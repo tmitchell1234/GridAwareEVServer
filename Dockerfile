@@ -1,5 +1,5 @@
 FROM messense/rust-musl-cross:x86_64-musl AS builder
-ENV SQLX_OFFLINE=true 
+ENV SQLX_OFFLINE=true
 # ^ might not be necessary, given our setup
 WORKDIR /grid-aware-server
 
@@ -13,6 +13,7 @@ ENV OPENSSL_INCLUDE_DIR=/usr/include
 
 # Copy the source code
 COPY . .
+COPY .sqlx .sqlx
 # Build the application
 RUN cargo build --release --target x86_64-unknown-linux-musl
 

@@ -12,91 +12,27 @@
 */
 use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-use chrono::{ Utc, Duration };
+// use chrono::{ Utc, Duration };
 use dotenvy::dotenv;
-use jsonwebtoken::{ encode, decode, Header, Validation, EncodingKey, DecodingKey, TokenData };
+//use jsonwebtoken::{ encode, decode, Header, Validation, EncodingKey, DecodingKey, TokenData };
+// use jsonwebtoken::{ encode, Header, EncodingKey };
 use serde_json::json;
-use serde::{Deserialize, Serialize};
+// use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use sqlx;
 use std::env;
 
 // for passowrd hashing
-use sha2::{ Sha256, Digest};
+// use sha2::{ Sha256, Digest};
 
 
+// module imports
+mod structs;
+use crate::structs::{ JsonPackage, NewUserParams, MyParams, User, UserLoginParams };
 
-/*
-============================================================================
-                        STRUCT DEFINITIONS
-                Used to receive JSON packets in API endpoints
-============================================================================
-*/
+mod helper_functions;
+use crate::helper_functions::{ hash_password, create_jwt };
 
-// struct to hold JSON Web Token information
-#[derive(Debug, Serialize, Deserialize)]
-struct User
-{
-    user_email: String,
-    user_first_name: Option<String>,
-    user_last_name: Option<String>,
-    user_organization: Option<String>,
-
-
-    // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
-
-    // TODO: We can add an expiration time to the JSON Web token if we decide to do so
-    // exp: String
-}
-
-
-
-// structs to receive API packets
-#[derive(Deserialize)]
-struct MyParams
-{
-    name: String,
-}
-
-#[derive(Deserialize)]
-struct JsonPackage // for a JSON object with a single string, used for testing
-{
-    request_body: String,
-}
-
-#[derive(Deserialize)]
-struct NewUserParams // for user_add endpoint
-{ 
-    user_email: String,
-    user_password: String,
-    user_first_name: String,
-    user_last_name: String,
-    user_organization: Option<String>,
-}
-
-impl NewUserParams
-{
-    // returns password string for purpose of converting it to a string slice, so it can then be hashed in the hashing function
-    fn get_password_str(&self) -> &str
-    {
-        &self.user_password
-    }
-}
-
-#[derive(Deserialize)]
-struct UserLoginParams
-{
-    user_email: String,
-    user_password: String
-}
-
-impl UserLoginParams
-{
-    fn get_password_str(&self) -> &str
-    {
-        &self.user_password
-    }
-}
 
 /*
 ============================================================================
@@ -134,44 +70,6 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-
-/*
-============================================================================
-                HELPER FUNCTIONS FOR SERVER ACTIVITIES
-============================================================================
-*/
-
-fn hash_password(password: &str) -> String
-{
-    let mut hasher = Sha256::new();
-    hasher.update(password);
-    let result = hasher.finalize();
-    format!{"{:x}", result}
-}
-
-
-// JWT functions
-fn create_jwt(user_info: &User) -> String
-{
-    let key = env::var("JWT_SECRET").expect("JWT_SECRET environment variable not found!");
-    let key_bytestring: Vec<u8> = key.as_bytes().to_vec();
-
-    let token = encode(&Header::default(), &user_info, &EncodingKey::from_secret(&key_bytestring))
-        .expect("Failed to encode token in create_jwt()!");
-
-    println!("Created JWT token! {}", token);
-    token
-}
-
-fn verify_jwt(token: &str) -> Result<TokenData<User>, jsonwebtoken::errors::Error>
-{
-    let key = env::var("JWT_SECRET").expect("JWT_SECRET environment variable not found!");
-    let key_bytestring: Vec<u8> = key.as_bytes().to_vec();
-
-    let validation = Validation::default();
-
-    decode::<User>(token, &DecodingKey::from_secret(&key_bytestring), &validation)
-}
 /*
 ============================================================================
                         BEGIN API ENDPOINTS
@@ -204,18 +102,18 @@ async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParams>) 
 {
     // let pass_str: &str = params.get_password_str();
 
-    let hashed_password = hash_password(&params.get_password_str());
+    let hashed_password = hash_password(&params.user_password());
 
     let result = sqlx::query!(
         r#"
         INSERT INTO Users (user_email, user_password, user_first_name, user_last_name, user_organization)
         VALUES ($1, $2, $3, $4, $5)
         "#,
-        params.user_email,
+        params.user_email(),
         hashed_password,
-        params.user_first_name,
-        params.user_last_name,
-        params.user_organization
+        params.user_first_name(),
+        params.user_last_name(),
+        params.user_organization()
     )
     .execute(pool.get_ref())
     .await;
@@ -235,7 +133,7 @@ async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>)
     let hashed_password = hash_password(&params.get_password_str());
 
     // query the database (using helper function below) to search for user credentials
-    match get_user_with_credentials(pool.as_ref(), &params.user_email, &hashed_password).await
+    match get_user_with_credentials(pool.as_ref(), params.user_email(), &hashed_password).await
     {
         Ok(user) => {
             // println!("Found user: {:?}", user);
@@ -255,9 +153,6 @@ async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>)
             HttpResponse::BadRequest().json(web::Json(json!({ "error": "Some other error occured, see server stack trace" })))
         }
     }
-
-
-    //HttpResponse::Ok()
 }
 
 // helper function for login, queries the database with appropriate tools to catch and report errors
