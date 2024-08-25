@@ -12,26 +12,22 @@
 */
 use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-// use chrono::{ Utc, Duration };
+use chrono::{ DateTime, Utc };
 use dotenvy::dotenv;
-//use jsonwebtoken::{ encode, decode, Header, Validation, EncodingKey, DecodingKey, TokenData };
-// use jsonwebtoken::{ encode, Header, EncodingKey };
 use serde_json::json;
-// use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use sqlx;
 use std::env;
-
-// for passowrd hashing
-// use sha2::{ Sha256, Digest};
+use std::time::SystemTime;
+use time::OffsetDateTime;
 
 
 // module imports
 mod structs;
-use crate::structs::{ JsonPackage, NewUserParams, MyParams, User, UserLoginParams };
+use crate::structs::{ JsonPackage, NewUserParams, MyParams, SmartControllerPacket, User, UserLoginParams, WebToken };
 
 mod helper_functions;
-use crate::helper_functions::{ hash_password, create_jwt };
+use crate::helper_functions::{ hash_password, create_jwt, verify_jwt };
 
 
 /*
@@ -48,8 +44,6 @@ async fn main() -> std::io::Result<()> {
     println!("database_url = ");
     println!("{}", database_url);
 
-    
-
     let pool = PgPool::connect(&database_url).await.expect("Failed to create pool.");
 
     println!("Successfully connected pool!");
@@ -63,8 +57,9 @@ async fn main() -> std::io::Result<()> {
             .route("/echo", web::post().to(echo))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
+            .route("/decode_jwt", web::post().to(decode_user_jwt))
+            .route("/store_controller_reading", web::post().to(store_controller_reading))
     })
-    //.bind("127.0.0.1:8080")?  // Change port to this for local testing
     .bind("0.0.0.0:3000")? // for production environment
     .run()
     .await
@@ -157,7 +152,7 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
 {
     let result = sqlx::query_as!(
         User,
-        "SELECT user_type, user_email, user_first_name, user_last_name, user_organization FROM users WHERE user_email = $1 AND user_password = $2",
+        "SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization FROM users WHERE user_email = $1 AND user_password = $2",
         user_email,
         hashed_password
     )
@@ -165,4 +160,75 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
     .await;
 
     result
+}
+
+
+// temporary endpoint, testing decoding of JWT. to be removed
+async fn decode_user_jwt(webtokenpacket: web::Json<WebToken>) -> impl Responder
+{
+    let result = verify_jwt(&webtokenpacket.token);
+
+    let unwrapped = result.unwrap().claims;
+
+    println!("result.user_id = {}", unwrapped.user_id);
+    println!("result.user_type = {}", unwrapped.user_type);
+    println!("result.user_first_name = {:?}", unwrapped.user_first_name);
+
+    let firstname = unwrapped.user_first_name;
+
+    match firstname
+    {
+        Some(actual_value) => {
+            println!("Firstname is: {}", actual_value);
+        },
+        None => {
+            println!("firstname does not contain anything!")
+        }
+    }
+    HttpResponse::Ok().finish()
+}
+
+
+
+
+
+/*
+============================================================================
+            Endpoints to receive Smart Controller data
+============================================================================
+*/
+
+async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web::Json<SmartControllerPacket>) -> impl Responder
+{
+    // parse datetime from string in packet
+    let parsed_datetime: DateTime<Utc> = controllerpacket.timestamp().parse().expect("Error: unable to parse timestamp from SmartControllerPacket!");
+
+    // convert to OffsetDateTime to make sqlx happy
+    let system_time: SystemTime = parsed_datetime.into();
+    let time_offset: OffsetDateTime = OffsetDateTime::from(system_time);
+
+
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO measurements (time, device_mac_address, frequency, voltage, current)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        time_offset,
+        controllerpacket.mac_address(),
+        controllerpacket.frequency(),
+        controllerpacket.voltage(),
+        controllerpacket.current()
+    )
+    .execute(pool.get_ref())
+    .await;
+
+    println!("\nInserted data into measurements time series table!\n");
+
+    match result {
+        Ok(_) => HttpResponse::Ok().json("Smart controller package entered successfully!"),
+        Err(e) => {
+            eprintln!("Failed to enter smart controller package {}", e);
+            HttpResponse::InternalServerError().json("Failed to enter smart controller package!")
+        }
+    }
 }

@@ -1,22 +1,30 @@
 /*
-============================================================================
-                        STRUCT DEFINITIONS
-                Used to receive JSON packets in API endpoints
-============================================================================
+==================================================
+                STRUCT DEFINITIONS
+        Used to receive JSON packets in API endpoints
+==================================================
 */
 
+// use chrono::{ DateTime, Local, Utc };
 use serde::{Deserialize, Serialize};
 
-// struct to hold JSON Web Token information
+
+/*
+==================================================
+                USER INFORMATION
+==================================================
+*/
+
+// struct to hold user information
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User
 {
+    pub user_id: i32,
     pub user_type: String,
     pub user_email: String,
     pub user_first_name: Option<String>,
     pub user_last_name: Option<String>,
-    pub user_organization: Option<String>,
-
+    pub user_organization: Option<String>
 
     // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
 
@@ -36,8 +44,33 @@ impl User
 }
 
 
+// struct to hold JSON Web Token information
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserDecodedJWT
+{
+    pub user_id: i32,
+    pub user_type: String,
+    pub user_email: String,
+    pub user_first_name: Option<String>,
+    pub user_last_name: Option<String>,
+    pub user_organization: Option<String>
+}
 
-// structs to receive API packets
+
+
+/*
+==================================================
+            VARIOUS API PACKETS
+==================================================
+*/
+#[derive(Deserialize)]
+pub struct WebToken
+{
+    pub token: String,
+    // pub exp: Option<usize>
+}
+
+
 #[derive(Deserialize)]
 pub struct MyParams
 {
@@ -87,4 +120,31 @@ impl UserLoginParams
 
     // pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_email(&self) -> &str { &self.user_email }
+}
+
+
+/*
+==================================================
+            SMART CONTROLLER PACKETS
+==================================================
+*/
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartControllerPacket
+{
+    timestamp: String,
+    mac_address: String,
+    frequency: f32,
+    voltage: f32,
+    current: f32
+}
+
+impl SmartControllerPacket
+{
+    pub fn timestamp(&self) -> &str { &self.timestamp }
+    pub fn mac_address(&self) -> &str { &self.mac_address }
+    pub fn frequency(&self) -> &f32 { &self.frequency }
+    pub fn voltage(&self) -> &f32 { &self.voltage }
+    pub fn current(&self) -> &f32 { &self.current }
 }
