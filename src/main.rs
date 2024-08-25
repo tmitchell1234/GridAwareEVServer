@@ -13,23 +13,13 @@
 use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::{ DateTime, Utc };
-// use chrono::{ Utc };
 use dotenvy::dotenv;
-//use jsonwebtoken::{ encode, decode, Header, Validation, EncodingKey, DecodingKey, TokenData };
-// use jsonwebtoken::{ encode, Header, EncodingKey };
 use serde_json::json;
-// use serde::{Deserialize, Serialize};
-// use sqlx::postgres::{ PgPool, PgPoolOptions };
 use sqlx::postgres::PgPool;
-// use sqlx::types::chrono::DateTime;
 use sqlx;
 use std::env;
 use std::time::SystemTime;
-
 use time::OffsetDateTime;
-
-// for passowrd hashing
-// use sha2::{ Sha256, Digest};
 
 
 // module imports
@@ -54,8 +44,6 @@ async fn main() -> std::io::Result<()> {
     println!("database_url = ");
     println!("{}", database_url);
 
-    
-
     let pool = PgPool::connect(&database_url).await.expect("Failed to create pool.");
 
     println!("Successfully connected pool!");
@@ -72,7 +60,6 @@ async fn main() -> std::io::Result<()> {
             .route("/decode_jwt", web::post().to(decode_user_jwt))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
     })
-    //.bind("127.0.0.1:8080")?  // Change port to this for local testing
     .bind("0.0.0.0:3000")? // for production environment
     .run()
     .await
@@ -181,9 +168,6 @@ async fn decode_user_jwt(webtokenpacket: web::Json<WebToken>) -> impl Responder
 {
     let result = verify_jwt(&webtokenpacket.token);
 
-    // println!("Decoded JWT is:");
-    // println!("{:?}", result);
-
     let unwrapped = result.unwrap().claims;
 
     println!("result.user_id = {}", unwrapped.user_id);
@@ -238,8 +222,7 @@ async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web
     .execute(pool.get_ref())
     .await;
 
-
-    println!("Result: {:?}", result);
+    println!("\nInserted data into measurements time series table!\n");
 
     match result {
         Ok(_) => HttpResponse::Ok().json("Smart controller package entered successfully!"),
