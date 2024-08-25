@@ -1,17 +1,18 @@
 /*
-============================================================================
-                        STRUCT DEFINITIONS
-                Used to receive JSON packets in API endpoints
-============================================================================
+==================================================
+                STRUCT DEFINITIONS
+        Used to receive JSON packets in API endpoints
+==================================================
 */
 
+// use chrono::{ DateTime, Local, Utc };
 use serde::{Deserialize, Serialize};
 
 
 /*
-============================================================================
-                        USER INFORMATION
-============================================================================
+==================================================
+                USER INFORMATION
+==================================================
 */
 
 // struct to hold user information
@@ -57,9 +58,11 @@ pub struct UserDecodedJWT
 
 
 
-
-
-// structs to receive API packets
+/*
+==================================================
+            VARIOUS API PACKETS
+==================================================
+*/
 #[derive(Deserialize)]
 pub struct WebToken
 {
@@ -117,4 +120,31 @@ impl UserLoginParams
 
     // pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_email(&self) -> &str { &self.user_email }
+}
+
+
+/*
+==================================================
+            SMART CONTROLLER PACKETS
+==================================================
+*/
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartControllerPacket
+{
+    timestamp: String,
+    mac_address: String,
+    frequency: f32,
+    voltage: f32,
+    current: f32
+}
+
+impl SmartControllerPacket
+{
+    pub fn timestamp(&self) -> &str { &self.timestamp }
+    pub fn mac_address(&self) -> &str { &self.mac_address }
+    pub fn frequency(&self) -> &f32 { &self.frequency }
+    pub fn voltage(&self) -> &f32 { &self.voltage }
+    pub fn current(&self) -> &f32 { &self.current }
 }

@@ -12,15 +12,21 @@
 */
 use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-// use chrono::{ Utc, Duration };
+use chrono::{ DateTime, Utc };
+// use chrono::{ Utc };
 use dotenvy::dotenv;
 //use jsonwebtoken::{ encode, decode, Header, Validation, EncodingKey, DecodingKey, TokenData };
 // use jsonwebtoken::{ encode, Header, EncodingKey };
 use serde_json::json;
 // use serde::{Deserialize, Serialize};
+// use sqlx::postgres::{ PgPool, PgPoolOptions };
 use sqlx::postgres::PgPool;
+// use sqlx::types::chrono::DateTime;
 use sqlx;
 use std::env;
+use std::time::SystemTime;
+
+use time::OffsetDateTime;
 
 // for passowrd hashing
 // use sha2::{ Sha256, Digest};
@@ -28,7 +34,7 @@ use std::env;
 
 // module imports
 mod structs;
-use crate::structs::{ JsonPackage, NewUserParams, MyParams, User, UserLoginParams, WebToken };
+use crate::structs::{ JsonPackage, NewUserParams, MyParams, SmartControllerPacket, User, UserLoginParams, WebToken };
 
 mod helper_functions;
 use crate::helper_functions::{ hash_password, create_jwt, verify_jwt };
@@ -64,6 +70,7 @@ async fn main() -> std::io::Result<()> {
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
             .route("/decode_jwt", web::post().to(decode_user_jwt))
+            .route("/store_controller_reading", web::post().to(store_controller_reading))
     })
     //.bind("127.0.0.1:8080")?  // Change port to this for local testing
     .bind("0.0.0.0:3000")? // for production environment
@@ -195,4 +202,50 @@ async fn decode_user_jwt(webtokenpacket: web::Json<WebToken>) -> impl Responder
         }
     }
     HttpResponse::Ok().finish()
+}
+
+
+
+
+
+/*
+============================================================================
+            Endpoints to receive Smart Controller data
+============================================================================
+*/
+
+async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web::Json<SmartControllerPacket>) -> impl Responder
+{
+    // parse datetime from string in packet
+    let parsed_datetime: DateTime<Utc> = controllerpacket.timestamp().parse().expect("Error: unable to parse timestamp from SmartControllerPacket!");
+
+    // convert to OffsetDateTime to make sqlx happy
+    let system_time: SystemTime = parsed_datetime.into();
+    let time_offset: OffsetDateTime = OffsetDateTime::from(system_time);
+
+
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO measurements (time, device_mac_address, frequency, voltage, current)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        time_offset,
+        controllerpacket.mac_address(),
+        controllerpacket.frequency(),
+        controllerpacket.voltage(),
+        controllerpacket.current()
+    )
+    .execute(pool.get_ref())
+    .await;
+
+
+    println!("Result: {:?}", result);
+
+    match result {
+        Ok(_) => HttpResponse::Ok().json("Smart controller package entered successfully!"),
+        Err(e) => {
+            eprintln!("Failed to enter smart controller package {}", e);
+            HttpResponse::InternalServerError().json("Failed to enter smart controller package!")
+        }
+    }
 }

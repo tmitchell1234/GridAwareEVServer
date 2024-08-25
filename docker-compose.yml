@@ -2,7 +2,7 @@ services:
   server:
     image: tmitchell1234/grid-aware-server
     environment:
-      DATABASE_URL: postgres://postgres:gridaware@localhost:5435/gridaware
+      DATABASE_URL: "postgres://postgres:gridaware@localhost:5435/gridaware"
     networks:
       - shared-server-network
     build:
