@@ -56,6 +56,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::post().to(index))
             .route("/echo", web::post().to(echo))
             .route("/register_device", web::post().to(register_device))
+            // .route("/unregister_device_user", web::post().to(unregister_device_user))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
@@ -270,3 +271,51 @@ async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<Reg
         }
     }
 }
+
+
+// remove device from devices table, called by individual user which provides their JSON web token.
+// we can re-use the RegisterDevicePacket struct.
+// async fn unregister_device_user(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket>) -> impl Responder
+// {
+//     // first, get user jwt information to get their userid
+//     match decode_user_jwt(register_params.user_jwt())
+//     {
+//         Ok(user_data_packet) =>
+//         {
+//             let user_data = user_data_packet.claims;
+
+//             // now store it in the devices table
+//             let result = sqlx::query!(
+//                 r#"
+//                 DELETE FROM devices
+//                 WHERE user_id = $1 AND device_mac_address = $2
+//                 "#,
+//                 user_data.user_id,
+//                 register_params.device_mac_address()
+//             )
+//             .execute(pool.get_ref())
+//             .await;
+
+//             match result
+//             {
+//                 Ok(message) =>
+//                 {
+//                     println!("Removed device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
+//                     HttpResponse::Ok().json("Device with mac address removed successfully!")
+//                 }
+
+//                 // some other weird error occurred
+//                 Err(e) =>
+//                 {
+//                     println!("Other error in unregister_device_user: {}", e);
+//                     HttpResponse::InternalServerError().json("Error, database deletion failed. Device is not registered or not associated with given user.")
+//                 }
+//             }
+//         }
+//         Err(e) =>
+//         {
+//             println!("Failed to decode JWT: {}", e);
+//             HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+//         }
+//     }
+// }
