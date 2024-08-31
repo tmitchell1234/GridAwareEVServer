@@ -8,7 +8,6 @@
 // use chrono::{ DateTime, Local, Utc };
 use serde::{Deserialize, Serialize};
 
-
 /*
 ==================================================
                 USER INFORMATION
@@ -17,32 +16,17 @@ use serde::{Deserialize, Serialize};
 
 // struct to hold user information
 #[derive(Debug, Serialize, Deserialize)]
-pub struct User
-{
+pub struct User {
     pub user_id: i32,
     pub user_type: String,
     pub user_email: String,
     pub user_first_name: Option<String>,
     pub user_last_name: Option<String>,
-    pub user_organization: Option<String>
-
-    // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
+    pub user_organization: Option<String>, // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
 
     // TODO: We can add an expiration time to the JSON Web token if we decide to do so with this field
     // exp: String
 }
-
-// no longer needed, but keeping for future syntax reference
-impl User
-{
-    // getter methods
-    // pub fn get_key(&self) -> &str { &self.api_key }
-    // pub fn user_email(&self) -> &str { &self.user_email }
-    // pub fn user_first_name(&self) -> Option<&str> { self.user_first_name.as_deref() }
-    // pub fn user_last_name(&self) -> Option<&str> { self.user_last_name.as_deref() }
-    // pub fn user_organization(&self) -> Option<&str> { self.user_organization.as_deref() }
-}
-
 
 // struct to hold JSON Web Token information
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,23 +37,14 @@ pub struct UserDecodedJWT
     pub user_email: String,
     pub user_first_name: Option<String>,
     pub user_last_name: Option<String>,
-    pub user_organization: Option<String>
+    pub user_organization: Option<String>,
 }
-
-
 
 /*
 ==================================================
             VARIOUS API PACKETS
 ==================================================
 */
-#[derive(Deserialize)]
-pub struct WebToken
-{
-    pub token: String,
-    // pub exp: Option<usize>
-}
-
 
 #[derive(Deserialize)]
 pub struct MyParams
@@ -78,13 +53,15 @@ pub struct MyParams
 }
 
 #[derive(Deserialize)]
-pub struct JsonPackage // for a JSON object with a single string, used for testing
+pub struct JsonPackage
+// for a JSON object with a single string, used for testing
 {
     pub request_body: String,
 }
 
 #[derive(Deserialize)]
-pub struct NewUserParams // for user_add endpoint
+pub struct NewUserParams
+// for user_add endpoint
 {
     user_type: String,
     user_email: String,
@@ -108,27 +85,22 @@ impl NewUserParams
 pub struct UserLoginParams
 {
     user_email: String,
-    user_password: String
+    user_password: String,
 }
 
 impl UserLoginParams
 {
-    pub fn get_password_str(&self) -> &str
-    {
-        &self.user_password
-    }
+    pub fn get_password_str(&self) -> &str { &self.user_password }
 
     // pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_email(&self) -> &str { &self.user_email }
 }
-
 
 /*
 ==================================================
             SMART CONTROLLER PACKETS
 ==================================================
 */
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SmartControllerPacket
@@ -137,7 +109,7 @@ pub struct SmartControllerPacket
     mac_address: String,
     frequency: f32,
     voltage: f32,
-    current: f32
+    current: f32,
 }
 
 impl SmartControllerPacket
@@ -147,4 +119,24 @@ impl SmartControllerPacket
     pub fn frequency(&self) -> &f32 { &self.frequency }
     pub fn voltage(&self) -> &f32 { &self.voltage }
     pub fn current(&self) -> &f32 { &self.current }
+}
+
+
+/*
+==================================================
+            REGISTER DEVICE PACKETS
+==================================================
+*/
+
+#[derive(Serialize, Deserialize)]
+pub struct RegisterDevicePacket
+{
+    user_jwt: String,
+    device_mac_address: String
+}
+
+impl RegisterDevicePacket
+{
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
 }

@@ -14,8 +14,9 @@ use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::{ DateTime, Utc };
 use dotenvy::dotenv;
+// use jsonwebtoken::TokenData;
 use serde_json::json;
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgDatabaseError, PgPool};
 use sqlx;
 use std::env;
 use std::time::SystemTime;
@@ -24,10 +25,10 @@ use time::OffsetDateTime;
 
 // module imports
 mod structs;
-use crate::structs::{ JsonPackage, NewUserParams, MyParams, SmartControllerPacket, User, UserLoginParams, WebToken };
+use crate::structs::{ JsonPackage, NewUserParams, MyParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
 
 mod helper_functions;
-use crate::helper_functions::{ hash_password, create_jwt, verify_jwt };
+use crate::helper_functions::{  create_jwt, decode_user_jwt, hash_password};
 
 
 /*
@@ -47,18 +48,17 @@ async fn main() -> std::io::Result<()> {
     let pool = PgPool::connect(&database_url).await.expect("Failed to create pool.");
 
     println!("Successfully connected pool!");
-    
-
+ 
     HttpServer::new(move || {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
             .route("/", web::post().to(index))
             .route("/echo", web::post().to(echo))
+            .route("/register_device", web::post().to(register_device))
+            .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
-            .route("/decode_jwt", web::post().to(decode_user_jwt))
-            .route("/store_controller_reading", web::post().to(store_controller_reading))
     })
     .bind("0.0.0.0:3000")? // for production environment
     .run()
@@ -162,42 +162,13 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
     result
 }
 
-
-// temporary endpoint, testing decoding of JWT. to be removed
-async fn decode_user_jwt(webtokenpacket: web::Json<WebToken>) -> impl Responder
-{
-    let result = verify_jwt(&webtokenpacket.token);
-
-    let unwrapped = result.unwrap().claims;
-
-    println!("result.user_id = {}", unwrapped.user_id);
-    println!("result.user_type = {}", unwrapped.user_type);
-    println!("result.user_first_name = {:?}", unwrapped.user_first_name);
-
-    let firstname = unwrapped.user_first_name;
-
-    match firstname
-    {
-        Some(actual_value) => {
-            println!("Firstname is: {}", actual_value);
-        },
-        None => {
-            println!("firstname does not contain anything!")
-        }
-    }
-    HttpResponse::Ok().finish()
-}
-
-
-
-
-
 /*
 ============================================================================
-            Endpoints to receive Smart Controller data
+            Endpoints related to Smart Controller devices
 ============================================================================
 */
 
+// receive and store controller reading packet
 async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web::Json<SmartControllerPacket>) -> impl Responder
 {
     // parse datetime from string in packet
@@ -229,6 +200,73 @@ async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web
         Err(e) => {
             eprintln!("Failed to enter smart controller package {}", e);
             HttpResponse::InternalServerError().json("Failed to enter smart controller package!")
+        }
+    }
+}
+
+// register device by user
+async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket> ) -> impl Responder
+{
+    // first, get user jwt information to get their userid
+    match decode_user_jwt(register_params.user_jwt())
+    {
+        Ok(user_data_packet) =>
+        {
+            let user_data = user_data_packet.claims;
+
+            // now store it in the devices table
+            let result = sqlx::query!(
+                r#"
+                INSERT INTO devices ( user_id, device_mac_address )
+                VALUES ($1, $2)
+                "#,
+                user_data.user_id,
+                register_params.device_mac_address()
+            )
+            .execute(pool.get_ref())
+            .await;
+
+            match result
+            {
+                Ok(message) =>
+                {
+                    println!("Entered device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
+                    HttpResponse::Ok().json("Device with mac address registered successfully!")
+                }
+                
+                Err(sqlx::Error::Database(database_error)) =>
+                {
+                    // attempt to parse if the devie was already registered.
+                    // (violates unique mac address contraints)
+                    if let Some(postgres_error) = database_error.try_downcast_ref::<PgDatabaseError>()
+                    {
+                        if postgres_error.code() == "23505" {
+                            HttpResponse::BadRequest().json("Error, device with given mac address is already registered!")
+                        }
+                        else {
+                            println!("{}", database_error);
+                            HttpResponse::BadRequest().json("Error, database insertion failed. See server stack trace for more info.")
+                        }
+                    }
+                    
+                    else {
+                        println!("{}", database_error);
+                        HttpResponse::BadRequest().json("Error, database insertion failed. See server stack trace for more info.")
+                    }
+                }
+
+                // some other weird error occurred
+                Err(e) =>
+                {
+                    println!("Other error in register_device: {}", e);
+                    HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.")
+                }
+            }
+        }
+        Err(e) =>
+        {
+            println!("Failed to decode JWT: {}", e);
+            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
         }
     }
 }

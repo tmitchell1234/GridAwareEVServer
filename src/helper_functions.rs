@@ -32,17 +32,15 @@ pub fn create_jwt(user_info: &User) -> String
         .expect("Failed to encode token in create_jwt()!");
 
     println!("Created JWT token! {}", token);
-    token
+    return token;
 }
 
 
-
-pub fn verify_jwt(token: &str) -> Result<TokenData<UserDecodedJWT>, jsonwebtoken::errors::Error>
+pub fn decode_user_jwt(token: &str) -> Result<TokenData<UserDecodedJWT>, jsonwebtoken::errors::Error>
 {
     let key = env::var("JWT_SECRET").expect("JWT_SECRET environment variable not found!");
     let key_bytestring: Vec<u8> = key.as_bytes().to_vec();
 
-    // let mut validation = Validation::default();
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = false; // do not require validation of expiration field
 
