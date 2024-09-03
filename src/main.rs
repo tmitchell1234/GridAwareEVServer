@@ -25,7 +25,7 @@ use time::OffsetDateTime;
 
 // module imports
 mod structs;
-use crate::structs::{ JsonPackage, NewUserParams, MyParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
+use crate::structs::{ DeviceQueryPacket, Devices, JsonPackage, NewUserParams, MyParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
 
 mod helper_functions;
 use crate::helper_functions::{  create_jwt, decode_user_jwt, hash_password};
@@ -55,6 +55,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .route("/", web::post().to(index))
             .route("/echo", web::post().to(echo))
+            .route("/get_devices_for_user", web::get().to(get_devices_for_user))
             .route("/register_device", web::post().to(register_device))
             .route("/unregister_device_user", web::post().to(unregister_device_by_user))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
@@ -375,4 +376,52 @@ async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params: web
             HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
         }
     }
+}
+
+async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: web::Json<DeviceQueryPacket>) -> impl Responder
+{
+    // decode the user's JWT
+    match decode_user_jwt(device_query_params.user_jwt())
+    {
+        Ok(user_data_packet) =>
+        {
+            let user_id = user_data_packet.claims.user_id;
+
+            // get and return list of devices from the database
+            let result = sqlx::query_as!(
+                Devices,
+                r#"
+                SELECT device_mac_address
+                FROM devices
+                WHERE user_id = $1
+                "#,
+                user_id
+            )
+            .fetch_all(pool.get_ref())
+            .await;
+            
+            println!("Got list of devices successfully!");
+            println!("{:?}", result);
+
+            match result
+            {
+                Ok(device_list) =>
+                {
+                    HttpResponse::Ok().json(device_list)
+                }
+                Err(e) =>
+                {
+                    println!("Error querying DB in get_devices...");
+                    println!("{:?}\n", e);
+                    HttpResponse::InternalServerError().json("Error querying database! Check server stack trace.")
+                }
+            }
+        }
+        Err (e) =>
+        {
+            println!("Failed to decode JWT: {}", e);
+            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+        }
+    }
+    // HttpResponse::Ok()
 }

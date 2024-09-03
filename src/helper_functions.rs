@@ -49,3 +49,21 @@ pub fn decode_user_jwt(token: &str) -> Result<TokenData<UserDecodedJWT>, jsonweb
 
     decode::<UserDecodedJWT>(token, &DecodingKey::from_secret(&key_bytestring), &validation)
 }
+
+// pub async fn get_user_devices(pool: &PgPool, user_id: i32) -> Result<Vec<Devices>, sqlx::Error>
+// {
+//     // get and return list of devices from the database
+//     let result = sqlx::query_as!(
+//         Devices,
+//         r#"
+//         SELECT device_mac_address
+//         FROM devices
+//         WHERE user_id = $1
+//         "#,
+//         user_id
+//     )
+//     .fetch_all(pool)
+//     .await?;
+
+//     Ok(result)
+// }
