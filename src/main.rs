@@ -57,7 +57,7 @@ async fn main() -> std::io::Result<()> {
             .route("/echo", web::post().to(echo))
             .route("/get_devices_for_user", web::get().to(get_devices_for_user))
             .route("/register_device", web::post().to(register_device))
-            .route("/unregister_device_user", web::post().to(unregister_device_by_user))
+            .route("/unregister_device_by_user", web::post().to(unregister_device_by_user))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
