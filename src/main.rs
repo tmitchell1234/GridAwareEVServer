@@ -56,7 +56,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", web::post().to(index))
             .route("/echo", web::post().to(echo))
             .route("/register_device", web::post().to(register_device))
-            // .route("/unregister_device_user", web::post().to(unregister_device_user))
+            .route("/unregister_device_user", web::post().to(unregister_device_by_user))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
@@ -72,7 +72,7 @@ async fn main() -> std::io::Result<()> {
 ============================================================================
 */
 
-
+// useless API for testing/experimation purposes
 async fn index(params: web::Json<MyParams>) -> impl Responder {
     HttpResponse::Ok().body(format!("Hello, {}!\n", params.name))
 }
@@ -275,47 +275,104 @@ async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<Reg
 
 // remove device from devices table, called by individual user which provides their JSON web token.
 // we can re-use the RegisterDevicePacket struct.
-// async fn unregister_device_user(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket>) -> impl Responder
-// {
-//     // first, get user jwt information to get their userid
-//     match decode_user_jwt(register_params.user_jwt())
-//     {
-//         Ok(user_data_packet) =>
-//         {
-//             let user_data = user_data_packet.claims;
+async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket>) -> impl Responder
+{
+    // first, get user jwt information to get their userid
+    match decode_user_jwt(register_params.user_jwt())
+    {
+        Ok(user_data_packet) =>
+        {
+            let user_data = user_data_packet.claims;
 
-//             // now store it in the devices table
-//             let result = sqlx::query!(
-//                 r#"
-//                 DELETE FROM devices
-//                 WHERE user_id = $1 AND device_mac_address = $2
-//                 "#,
-//                 user_data.user_id,
-//                 register_params.device_mac_address()
-//             )
-//             .execute(pool.get_ref())
-//             .await;
+            // first, check if the device actually belongs to the given user
+            let user_device_check = sqlx::query!(
+                r#"
+                SELECT user_id, device_mac_address
+                FROM devices
+                WHERE user_id = $1 AND device_mac_address = $2
+                "#,
+                user_data.user_id,
+                register_params.device_mac_address()
+            )
+            .fetch_one(pool.get_ref())
+            .await;
 
-//             match result
-//             {
-//                 Ok(message) =>
-//                 {
-//                     println!("Removed device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
-//                     HttpResponse::Ok().json("Device with mac address removed successfully!")
-//                 }
 
-//                 // some other weird error occurred
-//                 Err(e) =>
-//                 {
-//                     println!("Other error in unregister_device_user: {}", e);
-//                     HttpResponse::InternalServerError().json("Error, database deletion failed. Device is not registered or not associated with given user.")
-//                 }
-//             }
-//         }
-//         Err(e) =>
-//         {
-//             println!("Failed to decode JWT: {}", e);
-//             HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
-//         }
-//     }
-// }
+            // check the result of this query
+            match user_device_check
+            {
+                Ok(message) =>
+                {
+                    // query succeeded, do nothing and proceed to delete query
+                    println!("In unregister_device_user, result of user_device_check is:");
+                    println!("{:?}", message);
+                }
+                Err(e) =>
+                {
+                    println!("Error in user_device_check: {}", e);
+                    return HttpResponse::BadRequest().json("Bad request: user not associated with device!");
+                }
+            }
+
+            // next, delete all references to device_mac_address in measurements table
+            let remove_device_references = sqlx::query!(
+                r#"
+                DELETE FROM measurements
+                WHERE device_mac_address = $1
+                "#,
+                register_params.device_mac_address()
+            )
+            .execute(pool.get_ref())
+            .await;
+
+            // check that measurements deletion worked
+            match remove_device_references
+            {
+                Ok(message) =>
+                {
+                    // query succeeded, do nothing and progress to device table deletion
+                    println!("In unregister_device_user, reslut of measurement deletion is:");
+                    println!("{:?}", message);
+                }
+                Err (e) =>
+                {
+                    println!("Error in remove_device_references: {}", e);
+                    return HttpResponse::InternalServerError().json("Server error, unable to remove device references in measurements table!");
+                }
+            }
+
+            // now remove from the devices table
+            let result = sqlx::query!(
+                r#"
+                DELETE FROM devices
+                WHERE user_id = $1 AND device_mac_address = $2
+                "#,
+                user_data.user_id,
+                register_params.device_mac_address()
+            )
+            .execute(pool.get_ref())
+            .await;
+
+            match result
+            {
+                Ok(message) =>
+                {
+                    println!("Removed device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
+                    HttpResponse::Ok().json("Device with mac address removed successfully!")
+                }
+
+                // some other weird error occurred
+                Err(e) =>
+                {
+                    println!("Other error in unregister_device_user: {}", e);
+                    HttpResponse::InternalServerError().json("Error, database deletion failed. Device is not registered or not associated with given user.")
+                }
+            }
+        }
+        Err(e) =>
+        {
+            println!("Failed to decode JWT: {}", e);
+            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+        }
+    }
+}
