@@ -140,3 +140,27 @@ impl RegisterDevicePacket
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
     pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
 }
+
+
+/*
+==================================================
+            QUERY USER DEVICES PACKET
+==================================================
+*/
+
+#[derive(Deserialize)]
+pub struct DeviceQueryPacket
+{
+    user_jwt: String
+}
+
+impl DeviceQueryPacket
+{
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Devices
+{
+    pub device_mac_address: Option<String>
+}
