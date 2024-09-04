@@ -4,8 +4,12 @@
 ============================================================================
 */
 
+// use actix_web::web;
+// use dotenvy::dotenv;
 use jsonwebtoken::{ encode, decode, Algorithm, Header, Validation, EncodingKey, DecodingKey, TokenData };
 use sha2::{ Sha256, Digest};
+use sqlx::postgres::{PgDatabaseError, PgPool};
+use sqlx;
 use std::env;
 use std::collections::HashSet;
 
@@ -50,20 +54,51 @@ pub fn decode_user_jwt(token: &str) -> Result<TokenData<UserDecodedJWT>, jsonweb
     decode::<UserDecodedJWT>(token, &DecodingKey::from_secret(&key_bytestring), &validation)
 }
 
-// pub async fn get_user_devices(pool: &PgPool, user_id: i32) -> Result<Vec<Devices>, sqlx::Error>
-// {
-//     // get and return list of devices from the database
-//     let result = sqlx::query_as!(
-//         Devices,
-//         r#"
-//         SELECT device_mac_address
-//         FROM devices
-//         WHERE user_id = $1
-//         "#,
-//         user_id
-//     )
-//     .fetch_all(pool)
-//     .await?;
 
-//     Ok(result)
-// }
+
+pub async fn check_api_key(pool: &PgPool, key: &String, user_id: i32) -> Result< (), String>
+{
+    // // first, hash the key
+    let hashed_key = get_hashed_key(key);
+
+    // query the database for the API key, associated with a given user
+    let result = sqlx::query!(
+        r#"
+        SELECT user_id, key_data
+        FROM apikeys
+        WHERE user_id = $1 AND key_data = $2
+        "#,
+        user_id,
+        hashed_key
+    )
+    .fetch_one(pool)
+    .await;
+
+    match result
+    {
+        Ok(_) =>
+        {
+            // println!("Result of row:");
+            // println!("{:?}", row);
+
+            // at this point, the user_id and api key have been validated.
+            // return a success message.
+            Ok(())
+        },
+        // 
+        Err(e) =>
+        {
+            println!("\nError in getting database result in check_api_key():");
+            println!("{:?}\n", e);
+            return Err(format!("API key validation failure!"));
+        }
+    }
+}
+
+fn get_hashed_key(base_key: &str) -> String
+{
+    let mut hasher = Sha256::new();
+    hasher.update(base_key.as_bytes());
+
+    format!("{:x}", hasher.finalize())
+}

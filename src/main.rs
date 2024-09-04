@@ -20,15 +20,19 @@ use sqlx::postgres::{PgDatabaseError, PgPool};
 use sqlx;
 use std::env;
 use std::time::SystemTime;
-use time::OffsetDateTime;
+use time::{OffsetDateTime, PrimitiveDateTime};
 
 
 // module imports
 mod structs;
 use crate::structs::{ DeviceQueryPacket, Devices, JsonPackage, NewUserParams, MyParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
 
+
+// DELETE ME
+use structs::TestPacket;
+
 mod helper_functions;
-use crate::helper_functions::{  create_jwt, decode_user_jwt, hash_password};
+use crate::helper_functions::{ check_api_key, create_jwt, decode_user_jwt, hash_password};
 
 
 /*
@@ -61,6 +65,7 @@ async fn main() -> std::io::Result<()> {
             .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
+            .route("/test_api_key_fn", web::post().to(test_api_key_fn))
     })
     .bind("0.0.0.0:3000")? // for production environment
     .run()
@@ -154,7 +159,9 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
 {
     let result = sqlx::query_as!(
         User,
-        "SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization FROM users WHERE user_email = $1 AND user_password = $2",
+        "SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization
+        FROM users
+        WHERE user_email = $1 AND user_password = $2",
         user_email,
         hashed_password
     )
@@ -424,4 +431,24 @@ async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: web:
         }
     }
     // HttpResponse::Ok()
+}
+
+async fn test_api_key_fn(pool: web::Data<PgPool>, test_params: web::Json<TestPacket>) -> impl Responder
+{
+    let result = check_api_key(pool.as_ref(), &test_params.api_key, test_params.user_id).await;
+
+    match result
+    {
+        Ok(()) =>
+        {
+            // do nothing. key check passed.
+            HttpResponse::Ok().finish()
+        }
+        Err(e) =>
+        {
+            println!("Result is:");
+            println!("{:?}", e);
+            return HttpResponse::BadRequest().json(e);
+        }
+    }
 }

@@ -164,3 +164,10 @@ pub struct Devices
 {
     pub device_mac_address: Option<String>
 }
+
+#[derive(Debug, Deserialize)]
+pub struct TestPacket
+{
+    pub api_key: String,
+    pub user_id: i32
+}
