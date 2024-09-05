@@ -1,4 +1,11 @@
 /*
+    GRID AWARE EV CHARGING - Web server
+
+    A Computer Science Senior Design project by:
+    JV, BB, SP, TM
+*/
+
+/*
 ==================================================
                 STRUCT DEFINITIONS
         Used to receive JSON packets in API endpoints
@@ -13,7 +20,7 @@ use serde::{Deserialize, Serialize};
 ==================================================
 */
 
-// struct to hold user information
+// struct to hold user information when queried from the database
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub user_id: i32,

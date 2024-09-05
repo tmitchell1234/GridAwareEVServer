@@ -1,4 +1,11 @@
 /*
+    GRID AWARE EV CHARGING - Web server
+
+    A Computer Science Senior Design project by:
+    JV, BB, SP, TM
+*/
+
+/*
 ============================================================================
                 HELPER FUNCTIONS FOR SERVER ACTIVITIES
 ============================================================================
@@ -11,7 +18,7 @@ use sqlx;
 use std::env;
 use std::collections::HashSet;
 
-use crate::structs::{ User, UserDecodedJWT };
+use crate::structs::structs::{ User, UserDecodedJWT };
 
 
 
