@@ -25,7 +25,7 @@ use time::{OffsetDateTime, PrimitiveDateTime};
 
 // module imports
 mod structs;
-use crate::structs::{ DeviceQueryPacket, Devices, JsonPackage, NewUserParams, MyParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
+use crate::structs::{ DeviceQueryPacket, Devices, NewUserParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
 
 
 // DELETE ME
@@ -57,8 +57,6 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
-            .route("/", web::post().to(index))
-            .route("/echo", web::post().to(echo))
             .route("/get_devices_for_user", web::get().to(get_devices_for_user))
             .route("/register_device", web::post().to(register_device))
             .route("/unregister_device_by_user", web::post().to(unregister_device_by_user))
@@ -77,22 +75,6 @@ async fn main() -> std::io::Result<()> {
                         BEGIN API ENDPOINTS
 ============================================================================
 */
-
-// useless API for testing/experimation purposes
-async fn index(params: web::Json<MyParams>) -> impl Responder {
-    HttpResponse::Ok().body(format!("Hello, {}!\n", params.name))
-}
-
-
-// useless API for testing/experimation purposes
-async fn echo(params: web::Json<JsonPackage>) -> impl Responder {
-    let owned_string: String = "ECHOOO ".to_owned();
-    let body: &String = &params.request_body;
-
-    let together = format!("{owned_string}{body}");
-
-    HttpResponse::Ok().body(together)
-}
 
 
 /*

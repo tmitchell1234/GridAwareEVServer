@@ -5,7 +5,6 @@
 ==================================================
 */
 
-// use chrono::{ DateTime, Local, Utc };
 use serde::{Deserialize, Serialize};
 
 /*
@@ -45,19 +44,6 @@ pub struct UserDecodedJWT
             VARIOUS API PACKETS
 ==================================================
 */
-
-#[derive(Deserialize)]
-pub struct MyParams
-{
-    pub name: String,
-}
-
-#[derive(Deserialize)]
-pub struct JsonPackage
-// for a JSON object with a single string, used for testing
-{
-    pub request_body: String,
-}
 
 #[derive(Deserialize)]
 pub struct NewUserParams
