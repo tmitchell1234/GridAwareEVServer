@@ -14,25 +14,20 @@ use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::{ DateTime, Utc };
 use dotenvy::dotenv;
-// use jsonwebtoken::TokenData;
 use serde_json::json;
 use sqlx::postgres::{PgDatabaseError, PgPool};
 use sqlx;
 use std::env;
 use std::time::SystemTime;
-use time::{OffsetDateTime, PrimitiveDateTime};
+use time::OffsetDateTime;
 
 
 // module imports
 mod structs;
-use crate::structs::{ DeviceQueryPacket, Devices, NewUserParams, RegisterDevicePacket, SmartControllerPacket, User, UserLoginParams };
-
-
-// DELETE ME
-use structs::TestPacket;
+use crate::structs::{ DeviceQueryPacket, Devices, NewUserParams, RegisterDevicePacket, SmartControllerPacket, UserLoginParams };
 
 mod helper_functions;
-use crate::helper_functions::{ check_api_key, create_jwt, decode_user_jwt, hash_password};
+use crate::helper_functions::{ create_jwt, decode_user_jwt, get_user_with_credentials, hash_password, validate_api_key };
 
 
 /*
@@ -63,7 +58,6 @@ async fn main() -> std::io::Result<()> {
             .route("/store_controller_reading", web::post().to(store_controller_reading))
             .route("/user_create", web::post().to(user_create))
             .route("/user_login", web::post().to(user_login))
-            .route("/test_api_key_fn", web::post().to(test_api_key_fn))
     })
     .bind("0.0.0.0:3000")? // for production environment
     .run()
@@ -84,9 +78,22 @@ async fn main() -> std::io::Result<()> {
 */
 async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParams>) -> impl Responder
 {
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+    
+    // hash the password and insert the new user into the DB
     let hashed_password = hash_password(&params.user_password());
 
-    let result = sqlx::query!(
+    let query = sqlx::query!(
         r#"
         INSERT INTO Users (user_type, user_email, user_password, user_first_name, user_last_name, user_organization)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -101,7 +108,7 @@ async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParams>) 
     .execute(pool.get_ref())
     .await;
 
-    match result {
+    match query {
         Ok(_) => HttpResponse::Ok().json("User created successfully"),
         Err(e) => {
             eprintln!("Failed to create user: {}", e);
@@ -113,9 +120,21 @@ async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParams>) 
 
 async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>) -> impl Responder
 {
-    let hashed_password = hash_password(&params.get_password_str());
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), params.api_key()).await;
 
-    // query the database (using helper function below) to search for user credentials
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+    
+    
+    let hashed_password = hash_password(&params.user_password());
+
+    // query the database (using helper function) to search for user credentials
     match get_user_with_credentials(pool.as_ref(), params.user_email(), &hashed_password).await
     {
         Ok(user) => {
@@ -126,8 +145,7 @@ async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>)
 
         },
         Err(sqlx::Error::RowNotFound) => {
-            // println!("No user found with given credentials!");
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid email or password!"})))
+            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Incorrect email or password!"})))
         },
         Err(e) => {
             println!("{:?}", e);
@@ -136,22 +154,6 @@ async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginParams>)
     }
 }
 
-// helper function for login, queries the database with appropriate tools to catch and report errors
-async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_password: &str) -> Result<User, sqlx::Error>
-{
-    let result = sqlx::query_as!(
-        User,
-        "SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization
-        FROM users
-        WHERE user_email = $1 AND user_password = $2",
-        user_email,
-        hashed_password
-    )
-    .fetch_one(pool)
-    .await;
-
-    result
-}
 
 /*
 ============================================================================
@@ -160,10 +162,21 @@ async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_passw
 */
 
 // receive and store controller reading packet
-async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web::Json<SmartControllerPacket>) -> impl Responder
+async fn store_controller_reading(pool: web::Data<PgPool>, controller_packet: web::Json<SmartControllerPacket>) -> impl Responder
 {
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), controller_packet.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
     // parse datetime from string in packet
-    let parsed_datetime: DateTime<Utc> = controllerpacket.timestamp().parse().expect("Error: unable to parse timestamp from SmartControllerPacket!");
+    let parsed_datetime: DateTime<Utc> = controller_packet.timestamp().parse().expect("Error: unable to parse timestamp from SmartControllerPacket!");
 
     // convert to OffsetDateTime to make sqlx happy
     let system_time: SystemTime = parsed_datetime.into();
@@ -176,10 +189,10 @@ async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web
         VALUES ($1, $2, $3, $4, $5)
         "#,
         time_offset,
-        controllerpacket.mac_address(),
-        controllerpacket.frequency(),
-        controllerpacket.voltage(),
-        controllerpacket.current()
+        controller_packet.mac_address(),
+        controller_packet.frequency(),
+        controller_packet.voltage(),
+        controller_packet.current()
     )
     .execute(pool.get_ref())
     .await;
@@ -195,10 +208,23 @@ async fn store_controller_reading(pool: web::Data<PgPool>, controllerpacket: web
     }
 }
 
+
 // register device by user
 async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket> ) -> impl Responder
 {
-    // first, get user jwt information to get their userid
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), register_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+
+    // decode user jwt to get their user_id
     match decode_user_jwt(register_params.user_jwt())
     {
         Ok(user_data_packet) =>
@@ -267,7 +293,19 @@ async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<Reg
 // we can re-use the RegisterDevicePacket struct.
 async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket>) -> impl Responder
 {
-    // first, get user jwt information to get their userid
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), register_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+
+    // decode user jwt to get their user_id
     match decode_user_jwt(register_params.user_jwt())
     {
         Ok(user_data_packet) =>
@@ -367,9 +405,23 @@ async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params: web
     }
 }
 
+
+// get a list of devices registered to a user
 async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: web::Json<DeviceQueryPacket>) -> impl Responder
 {
-    // decode the user's JWT
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), device_query_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+
+    // decode user jwt to get their user_id
     match decode_user_jwt(device_query_params.user_jwt())
     {
         Ok(user_data_packet) =>
@@ -413,24 +465,4 @@ async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: web:
         }
     }
     // HttpResponse::Ok()
-}
-
-async fn test_api_key_fn(pool: web::Data<PgPool>, test_params: web::Json<TestPacket>) -> impl Responder
-{
-    let result = check_api_key(pool.as_ref(), &test_params.api_key, test_params.user_id).await;
-
-    match result
-    {
-        Ok(()) =>
-        {
-            // do nothing. key check passed.
-            HttpResponse::Ok().finish()
-        }
-        Err(e) =>
-        {
-            println!("Result is:");
-            println!("{:?}", e);
-            return HttpResponse::BadRequest().json(e);
-        }
-    }
 }

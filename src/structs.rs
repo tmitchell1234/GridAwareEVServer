@@ -21,7 +21,9 @@ pub struct User {
     pub user_email: String,
     pub user_first_name: Option<String>,
     pub user_last_name: Option<String>,
-    pub user_organization: Option<String>, // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
+    pub user_organization: Option<String>
+    
+    // user_date_registered: Option<chrono::DateTime<Utc>> // removing temporarily beause it's causing issues with the SQLX query
 
     // TODO: We can add an expiration time to the JSON Web token if we decide to do so with this field
     // exp: String
@@ -46,9 +48,11 @@ pub struct UserDecodedJWT
 */
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NewUserParams
 // for user_add endpoint
 {
+    api_key: String,
     user_type: String,
     user_email: String,
     user_password: String,
@@ -59,6 +63,7 @@ pub struct NewUserParams
 
 impl NewUserParams
 {
+    pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_type(&self) -> &str { &self.user_type }
     pub fn user_email(&self) -> &str { &self.user_email }
     pub fn user_password(&self) -> &str { &self.user_password }
@@ -68,17 +73,18 @@ impl NewUserParams
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct UserLoginParams
 {
+    api_key: String,
     user_email: String,
     user_password: String,
 }
 
 impl UserLoginParams
 {
-    pub fn get_password_str(&self) -> &str { &self.user_password }
-
-    // pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_password(&self) -> &str { &self.user_password }
     pub fn user_email(&self) -> &str { &self.user_email }
 }
 
@@ -89,8 +95,10 @@ impl UserLoginParams
 */
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SmartControllerPacket
 {
+    api_key: String,
     timestamp: String,
     mac_address: String,
     frequency: f32,
@@ -100,6 +108,7 @@ pub struct SmartControllerPacket
 
 impl SmartControllerPacket
 {
+    pub fn api_key(&self) -> &str { &self.api_key }
     pub fn timestamp(&self) -> &str { &self.timestamp }
     pub fn mac_address(&self) -> &str { &self.mac_address }
     pub fn frequency(&self) -> &f32 { &self.frequency }
@@ -115,14 +124,17 @@ impl SmartControllerPacket
 */
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegisterDevicePacket
 {
+    api_key: String,
     user_jwt: String,
     device_mac_address: String
 }
 
 impl RegisterDevicePacket
 {
+    pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
     pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
 }
@@ -135,25 +147,22 @@ impl RegisterDevicePacket
 */
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeviceQueryPacket
 {
+    api_key: String,
     user_jwt: String
 }
 
 impl DeviceQueryPacket
 {
+    pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
 }
 
+// used to create array of devices in /get_devices_for_user endpoint
 #[derive(Debug, Serialize)]
 pub struct Devices
 {
     pub device_mac_address: Option<String>
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TestPacket
-{
-    pub api_key: String,
-    pub user_id: i32
 }
