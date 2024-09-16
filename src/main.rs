@@ -55,7 +55,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
-            .route("/get_devices_for_user", web::get().to(get_devices_for_user))
+            .route("/get_devices_for_user", web::post().to(get_devices_for_user))
             .route("/register_device", web::post().to(register_device))
             .route("/unregister_device_by_user", web::post().to(unregister_device_by_user))
             .route("/store_controller_reading", web::post().to(store_controller_reading))
