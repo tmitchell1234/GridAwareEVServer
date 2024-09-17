@@ -22,7 +22,8 @@ use time::OffsetDateTime;
 ============================================================================
 */
 use crate::helper_functions::helper_functions::validate_api_key;
-use crate::structs::structs::{DataQueryPacket, SmartControllerPacket};
+use crate::structs::structs::DataQueryPacket;
+
 
 
 /*
@@ -33,6 +34,19 @@ use crate::structs::structs::{DataQueryPacket, SmartControllerPacket};
 
 pub async fn get_data_in_recent_time_interval(pool: web::Data<PgPool>, controller_packet: web::Json<DataQueryPacket>) -> impl Responder
 {
-    HttpResponse::Ok()
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), controller_packet.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+
+
+    HttpResponse::Ok().finish()
 }
 

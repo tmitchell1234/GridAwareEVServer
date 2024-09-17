@@ -1,8 +1,10 @@
 services:
   server:
     image: tmitchell1234/grid-aware-server
+    container_name: server
     environment:
-      DATABASE_URL: "postgres://postgres:gridaware@localhost:5435/gridaware"
+      DATABASE_URL: "postgres://postgres:gridaware@timescaledb-container:5435/gridaware"
+      RUST_BACKTRACE: "full"
     networks:
       - shared-server-network
     build:

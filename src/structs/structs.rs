@@ -184,11 +184,13 @@ pub struct Devices
 pub struct DataQueryPacket
 {
     api_key: String,
-    user_jwt: String
+    user_jwt: String,
+    time_seconds: String
 }
 
 impl DataQueryPacket
 {
     pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn time_seconds(&self) -> &str { &self.time_seconds }
 }
