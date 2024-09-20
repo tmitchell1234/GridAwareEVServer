@@ -29,6 +29,7 @@ mod helper_functions;
 mod api_endpoints;
 use crate::api_endpoints::user_endpoints::{ get_devices_for_user, register_device, unregister_device_by_user, user_create, user_login };
 use crate::api_endpoints::device_endpoints::store_controller_reading;
+use crate::api_endpoints::data_queries::get_data_in_recent_time_interval;
 
 
 /*
@@ -55,6 +56,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
+            .route("/get_data_in_recent_time_interval", web::post().to( get_data_in_recent_time_interval ))
             .route("/get_devices_for_user", web::post().to( get_devices_for_user ))
             .route("/register_device", web::post().to( register_device ))
             .route("/unregister_device_by_user", web::post().to( unregister_device_by_user ))
