@@ -12,7 +12,10 @@
 ==================================================
 */
 
+// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use time::serde::rfc3339;
+use time::OffsetDateTime;
 
 /*
 ==================================================
@@ -149,7 +152,7 @@ impl RegisterDevicePacket
 
 /*
 ==================================================
-            QUERY USER DEVICES PACKET
+            QUERY USER DEVICES PACKETS
 ==================================================
 */
 
@@ -172,4 +175,57 @@ impl DeviceQueryPacket
 pub struct Devices
 {
     pub device_mac_address: Option<String>
+}
+
+/*
+==================================================
+            QUERY DATA PACKETS
+==================================================
+*/
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataQueryPacket
+{
+    api_key: String,
+    user_jwt: String,
+    device_mac_address: String,
+    time_seconds: f64
+}
+
+impl DataQueryPacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
+    pub fn time_seconds(&self) -> &f64 { &self.time_seconds }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Measurements
+{
+    // force formatting of timestamp as YYYY-MM-DD HH:MM:SS.MS
+    #[serde(with = "rfc3339")]
+    pub time: OffsetDateTime,
+    pub device_mac_address: String,
+    pub frequency: f32,
+    pub voltage: f32,
+    pub current: f32
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataQueryByDatePacket
+{
+    api_key: String,
+    user_jwt: String,
+    device_mac_address: String,
+    date_string: String
+}
+
+impl DataQueryByDatePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
+    pub fn date_string(&self) -> &str { &self.date_string }
 }

@@ -29,6 +29,7 @@ mod helper_functions;
 mod api_endpoints;
 use crate::api_endpoints::user_endpoints::{ get_devices_for_user, register_device, unregister_device_by_user, user_create, user_login };
 use crate::api_endpoints::device_endpoints::store_controller_reading;
+use crate::api_endpoints::data_queries::{ get_data_in_recent_time_interval, get_data_report_for_day };
 
 
 /*
@@ -55,12 +56,14 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Cors::permissive())
             .app_data(web::Data::new(pool.clone()))
-            .route("/get_devices_for_user", web::post().to(get_devices_for_user))
-            .route("/register_device", web::post().to(register_device))
-            .route("/unregister_device_by_user", web::post().to(unregister_device_by_user))
-            .route("/store_controller_reading", web::post().to(store_controller_reading))
-            .route("/user_create", web::post().to(user_create))
-            .route("/user_login", web::post().to(user_login))
+            .route("/get_data_in_recent_time_interval", web::post().to( get_data_in_recent_time_interval ))
+            .route("/get_data_report_for_day", web::post().to( get_data_report_for_day ))
+            .route("/get_devices_for_user", web::post().to( get_devices_for_user ))
+            .route("/register_device", web::post().to( register_device ))
+            .route("/unregister_device_by_user", web::post().to( unregister_device_by_user ))
+            .route("/store_controller_reading", web::post().to( store_controller_reading ))
+            .route("/user_create", web::post().to( user_create ))
+            .route("/user_login", web::post().to( user_login ))
     })
     .bind("0.0.0.0:3000")? // for production environment
     .run()

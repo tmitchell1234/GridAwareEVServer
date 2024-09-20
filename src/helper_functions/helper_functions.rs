@@ -60,7 +60,6 @@ pub fn decode_user_jwt(token: &str) -> Result<TokenData<UserDecodedJWT>, jsonweb
 }
 
 
-
 pub async fn validate_api_key(pool: &PgPool, key: &str) -> Result< (), String>
 {
     // // first, hash the key
