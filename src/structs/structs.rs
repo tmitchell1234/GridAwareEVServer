@@ -200,7 +200,6 @@ impl DataQueryPacket
     pub fn time_seconds(&self) -> &f64 { &self.time_seconds }
 }
 
-// #[serde_as]
 #[derive(Debug, Serialize)]
 pub struct Measurements
 {
@@ -211,4 +210,22 @@ pub struct Measurements
     pub frequency: f32,
     pub voltage: f32,
     pub current: f32
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataQueryByDatePacket
+{
+    api_key: String,
+    user_jwt: String,
+    device_mac_address: String,
+    date_string: String
+}
+
+impl DataQueryByDatePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
+    pub fn date_string(&self) -> &str { &self.date_string }
 }
