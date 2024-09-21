@@ -229,3 +229,24 @@ impl DataQueryByDatePacket
     pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
     pub fn date_string(&self) -> &str { &self.date_string }
 }
+
+
+/*
+==================================================
+            PASSWORD RESET PACKETS
+==================================================
+*/
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PasswordResetPacket
+{
+    api_key: String,
+    user_email: String
+}
+
+impl PasswordResetPacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_email(&self) -> &str { &self.user_email }
+}

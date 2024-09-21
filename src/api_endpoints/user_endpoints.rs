@@ -10,9 +10,14 @@
                         LIBRARY (CRATE) IMPORTS
 ============================================================================
 */
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder };
+use dotenvy::dotenv;
+use rand::Rng;
+use reqwest::Client;
+use reqwest::header::{ HeaderMap, HeaderValue, CONTENT_TYPE, AUTHORIZATION };
 use serde_json::json;
-use sqlx::postgres::{PgDatabaseError, PgPool};
+use sqlx::postgres::{ PgDatabaseError, PgPool };
+use std::env;
 
 
 /*
@@ -20,7 +25,7 @@ use sqlx::postgres::{PgDatabaseError, PgPool};
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -366,4 +371,181 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
         }
     }
     // HttpResponse::Ok()
+}
+
+
+/*
+============================================================================
+            Forgot Password / Password Reset endpoints
+============================================================================
+*/
+
+pub async fn reset_password_email(pool: web::Data<PgPool>, reset_params: web::Json<PasswordResetPacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), reset_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+    // check the database to see if the user has a registered email
+    let result = sqlx::query!(
+        r#"
+        SELECT *
+        FROM users
+        WHERE user_email = $1
+        "#,
+        reset_params.user_email()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+
+    let user;
+
+    match result
+    {
+        Ok(retrieved_user) =>
+        {
+            // found user with email, store their info
+            user = retrieved_user;
+        },
+        Err(e) =>
+        {
+            println!("User not found or connection error in reset_password_email:");
+            println!("{:?}", e);
+            return HttpResponse::BadRequest().json("Email not found!");
+        }
+    }
+
+    // generate a 6 digit reset code
+    let mut rng = rand::thread_rng();
+    let reset_code: i32 = rng.gen_range(100_000..1_000_000);
+
+
+    // create an entry for them in the passwordcodes table
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO passwordcodes(user_id, user_email, reset_code)
+        VALUES ($1, $2, $3)
+        "#,
+        user.user_id,
+        user.user_email,
+        reset_code
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+
+    match result
+    {
+        Ok(_) =>
+        { /* password code entered successfully, do nothing */ },
+        Err(e) =>
+        {
+            println!("Error inserting reset code into database:");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Error creating password code! See server logs.");
+        }
+    }
+
+
+
+
+    // build the sendgrid email and send it to the user with the generated code.
+    // load environment variables for sendgrid api key:
+    dotenv().ok();
+
+    let sendgrid_key = match env::var("SENDGRID_KEY")
+    {
+        Ok(key) => key,
+        Err(e) =>
+        {
+            println!("Error loading SENDGRID_KEY env var in reset_password_email()");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+    let sender_email = match env::var("SENDER_EMAIL")
+    {
+        Ok(email) => email,
+        Err(e) =>
+        {
+            println!("Error loading SENDER_EMAIL env var in reset_password_email()");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+    let auth_header = match HeaderValue::from_str( &format!("Bearer {}", sendgrid_key))
+    {
+        Ok(header_value) => header_value,
+        Err(e) =>
+        {
+            println!("Error setting authorization header for Sendgrid POST request!");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+    headers.insert(AUTHORIZATION, auth_header);
+
+
+    let body = json!({
+        "personalizations": [{
+            "to": [{
+                "email": user.user_email
+            }],
+            "subject": "Grid Aware EV Charging password reset"
+        }],
+        "from": {
+            "email": sender_email
+        },
+        "content": [{
+            "type": "text/plain",
+            "value": format!("Please enter the following code on the reset password form to continue resetting your password: {}", reset_code)
+        }]
+    });
+
+    let client = Client::new()
+        .post("https://api.sendgrid.com/v3/mail/send")
+        
+        // .bearer_auth(sendgrid_key)
+        .header("Authorization", format!("Bearer {}", sendgrid_key))
+        .header("Content-Type", "application/json")
+        .json(&body);
+
+
+    let response = client.send().await;
+
+    match response
+    {
+        Ok(res) if res.status().is_success() =>
+        {
+            println!("Succeeded in sending email!");
+            return HttpResponse::Ok().finish();
+        }
+        Ok(res) =>
+        {
+            println!("Bad response error: {}", res.status());
+            println!("{:?}", res);
+            return HttpResponse::BadRequest().json("Bad request!");
+        },
+        Err(e) =>
+        {
+            println!("Error sending Sendgrid email!");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Failed to send email, check server logs.")
+        }
+    }
 }
