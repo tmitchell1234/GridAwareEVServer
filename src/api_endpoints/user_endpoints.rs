@@ -10,9 +10,14 @@
                         LIBRARY (CRATE) IMPORTS
 ============================================================================
 */
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder };
+use dotenvy::dotenv;
+use rand::Rng;
+use reqwest::Client;
+use reqwest::header::{ HeaderMap, HeaderValue, CONTENT_TYPE, AUTHORIZATION };
 use serde_json::json;
-use sqlx::postgres::{PgDatabaseError, PgPool};
+use sqlx::postgres::{ PgDatabaseError, PgPool };
+use std::env;
 
 
 /*
@@ -20,7 +25,7 @@ use sqlx::postgres::{PgDatabaseError, PgPool};
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -39,13 +44,13 @@ pub async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParam
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
     
     // hash the password and insert the new user into the DB
-    let hashed_password = hash_password(&params.user_password());
+    let hashed_password = hash_password( &params.user_password() );
 
     let query = sqlx::query!(
         r#"
@@ -81,8 +86,8 @@ pub async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginPara
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
     
     
@@ -120,8 +125,8 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -201,8 +206,8 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -317,8 +322,8 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -366,4 +371,264 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
         }
     }
     // HttpResponse::Ok()
+}
+
+
+/*
+============================================================================
+            Forgot Password / Password Reset endpoints
+============================================================================
+*/
+
+pub async fn reset_password_email(pool: web::Data<PgPool>, reset_params: web::Json<PasswordResetPacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), reset_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // check the database to see if the user has a registered email
+    let result = sqlx::query!(
+        r#"
+        SELECT *
+        FROM users
+        WHERE user_email = $1
+        "#,
+        reset_params.user_email()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+
+    let user;
+
+    match result
+    {
+        Ok(retrieved_user) =>
+        {
+            // found user with email, store their info
+            user = retrieved_user;
+        },
+        Err(e) =>
+        {
+            println!("User not found or connection error in reset_password_email:");
+            println!("{:?}", e);
+            return HttpResponse::BadRequest().json("Email not found!");
+        }
+    }
+
+    // generate a 6 digit reset code
+    let mut rng = rand::thread_rng();
+    let reset_code: i32 = rng.gen_range(100_000..1_000_000);
+
+
+    // create an entry for them in the passwordcodes table
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO passwordcodes(user_id, user_email, reset_code)
+        VALUES ($1, $2, $3)
+        "#,
+        user.user_id,
+        user.user_email,
+        reset_code
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+
+    match result
+    {
+        Ok(_) =>
+        { /* password code entered successfully, do nothing */ },
+        Err(e) =>
+        {
+            println!("Error inserting reset code into database:");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Error creating password code! See server logs.");
+        }
+    }
+
+
+
+
+    // build the sendgrid email and send it to the user with the generated code.
+    // load environment variables for sendgrid api key:
+    dotenv().ok();
+
+    let sendgrid_key = match env::var("SENDGRID_KEY")
+    {
+        Ok(key) => key,
+        Err(e) =>
+        {
+            println!("Error loading SENDGRID_KEY env var in reset_password_email()");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+    let sender_email = match env::var("SENDER_EMAIL")
+    {
+        Ok(email) => email,
+        Err(e) =>
+        {
+            println!("Error loading SENDER_EMAIL env var in reset_password_email()");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+    let auth_header = match HeaderValue::from_str( &format!("Bearer {}", sendgrid_key))
+    {
+        Ok(header_value) => header_value,
+        Err(e) =>
+        {
+            println!("Error setting authorization header for Sendgrid POST request!");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server logs.");
+        }
+    };
+
+    headers.insert(AUTHORIZATION, auth_header);
+
+
+    let body = json!({
+        "personalizations": [{
+            "to": [{
+                "email": user.user_email
+            }],
+            "subject": "Grid Aware EV Charging password reset"
+        }],
+        "from": {
+            "email": sender_email
+        },
+        "content": [{
+            "type": "text/plain",
+            "value": format!("Please enter the following code on the reset password form to continue resetting your password: {}", reset_code)
+        }]
+    });
+
+    let client = Client::new()
+        .post("https://api.sendgrid.com/v3/mail/send")
+        
+        // .bearer_auth(sendgrid_key)
+        .header("Authorization", format!("Bearer {}", sendgrid_key))
+        .header("Content-Type", "application/json")
+        .json(&body);
+
+
+    let response = client.send().await;
+
+    match response
+    {
+        Ok(res) if res.status().is_success() =>
+        {
+            println!("Succeeded in sending email!");
+            return HttpResponse::Ok().finish();
+        }
+        Ok(res) =>
+        {
+            println!("Bad response error: {}", res.status());
+            println!("{:?}", res);
+            return HttpResponse::BadRequest().json("Bad request!");
+        },
+        Err(e) =>
+        {
+            println!("Error sending Sendgrid email!");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Failed to send email, check server logs.")
+        }
+    }
+}
+
+
+pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Json<PasswordResetCodePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), reset_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // check that there exists a password reset code associated with the given email address
+    let result = sqlx::query!(
+        r#"
+        SELECT *
+        FROM passwordcodes
+        WHERE
+        user_email = $1
+        AND
+        reset_code = $2
+        "#,
+        reset_params.user_email(),
+        reset_params.reset_code()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    // store the user_id for password updating:
+    let user_id: i32;
+
+    match result
+    {
+        Ok(row) =>
+        {
+            // password key and email validated
+            // grab user_id
+            user_id = row.user_id;
+        },
+        Err(e) =>
+        {
+            // either the email or reset code was not found
+            println!("Error in reset_password_code() code verification:");
+            println!("{:?}", e);
+            return HttpResponse::BadRequest().json("Invalid reset code or user does not have one!");
+        }
+    }
+
+    // reset code successfully validated, now hash the new password and update the database
+    let hashed_password = hash_password(&reset_params.new_password());
+
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_password = $1
+        WHERE
+        user_id = $2
+        "#,
+        hashed_password,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            // password updated successfully
+            println!("Password reset successfully in reset_password_code()!");
+            return HttpResponse::Ok().json("Password updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error updating password in reset_password_code():");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error when updating password.");
+        }
+    }
 }
