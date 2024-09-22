@@ -250,3 +250,21 @@ impl PasswordResetPacket
     pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_email(&self) -> &str { &self.user_email }
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PasswordResetCodePacket
+{
+    api_key: String,
+    user_email: String,
+    reset_code: i32,
+    new_password: String
+}
+
+impl PasswordResetCodePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_email(&self) -> &str { &self.user_email }
+    pub fn reset_code(&self) -> &i32 { &self.reset_code }
+    pub fn new_password(&self) -> &str { &self.new_password }
+}

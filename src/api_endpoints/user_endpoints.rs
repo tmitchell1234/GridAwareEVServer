@@ -25,7 +25,7 @@ use std::env;
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -44,13 +44,13 @@ pub async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParam
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
     
     // hash the password and insert the new user into the DB
-    let hashed_password = hash_password(&params.user_password());
+    let hashed_password = hash_password( &params.user_password() );
 
     let query = sqlx::query!(
         r#"
@@ -86,8 +86,8 @@ pub async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginPara
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
     
     
@@ -125,8 +125,8 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -206,8 +206,8 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -322,8 +322,8 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
 
@@ -389,8 +389,8 @@ pub async fn reset_password_email(pool: web::Data<PgPool>, reset_params: web::Js
     {
         Ok(()) =>
         { /*  do nothing - key check passed */ }
-        Err(e) =>
-        { return HttpResponse::BadRequest().json(e); }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
     // check the database to see if the user has a registered email
@@ -546,6 +546,89 @@ pub async fn reset_password_email(pool: web::Data<PgPool>, reset_params: web::Js
             println!("Error sending Sendgrid email!");
             println!("{:?}", e);
             return HttpResponse::InternalServerError().json("Failed to send email, check server logs.")
+        }
+    }
+}
+
+
+pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Json<PasswordResetCodePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), reset_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // check that there exists a password reset code associated with the given email address
+    let result = sqlx::query!(
+        r#"
+        SELECT *
+        FROM passwordcodes
+        WHERE
+        user_email = $1
+        AND
+        reset_code = $2
+        "#,
+        reset_params.user_email(),
+        reset_params.reset_code()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    // store the user_id for password updating:
+    let user_id: i32;
+
+    match result
+    {
+        Ok(row) =>
+        {
+            // password key and email validated
+            // grab user_id
+            user_id = row.user_id;
+        },
+        Err(e) =>
+        {
+            // either the email or reset code was not found
+            println!("Error in reset_password_code() code verification:");
+            println!("{:?}", e);
+            return HttpResponse::BadRequest().json("Invalid reset code or user does not have one!");
+        }
+    }
+
+    // reset code successfully validated, now hash the new password and update the database
+    let hashed_password = hash_password(&reset_params.new_password());
+
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_password = $1
+        WHERE
+        user_id = $2
+        "#,
+        hashed_password,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            // password updated successfully
+            println!("Password reset successfully in reset_password_code()!");
+            return HttpResponse::Ok().json("Password updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error updating password in reset_password_code():");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error when updating password.");
         }
     }
 }
