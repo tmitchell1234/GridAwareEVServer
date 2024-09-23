@@ -25,7 +25,9 @@ use std::env;
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, PasswordUpdatePacket, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket,
+                               PasswordResetPacket, PasswordUpdatePacket, RegisterDevicePacket,
+                               UpdateUserNamePacket, UpdateUserOrgPacket, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -694,6 +696,165 @@ pub async fn update_password(pool: web::Data<PgPool>, update_params: web::Json<P
         {
             println!("Error querying database in update_password: {:?}", e);
             return HttpResponse::InternalServerError().json("Error updating password, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_first_name(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserNamePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_first_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their first name in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_first_name = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_name(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("First name updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_first_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_last_name(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserNamePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_last_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their last name in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_last_name = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_name(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("Last name updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_last_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_organization(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserOrgPacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_organization: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their organization in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_organization = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_organization(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("User organization updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_organization: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
         }
     }
 }

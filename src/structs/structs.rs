@@ -292,3 +292,38 @@ impl PasswordUpdatePacket
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
     pub fn new_password(&self) -> &str { &self.new_password }
 }
+
+
+// update name packet, works for both first and last name (keeping them as separate endpoints for sake of simplicity)
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateUserNamePacket
+{
+    api_key: String,
+    user_jwt: String,
+    new_name: String
+}
+
+impl UpdateUserNamePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn new_name(&self) -> &str { &self.new_name }
+}
+
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateUserOrgPacket
+{
+    api_key: String,
+    user_jwt: String,
+    new_organization: String
+}
+
+impl UpdateUserOrgPacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn new_organization(&self) -> &str { &self.new_organization }
+}
