@@ -268,3 +268,27 @@ impl PasswordResetCodePacket
     pub fn reset_code(&self) -> &i32 { &self.reset_code }
     pub fn new_password(&self) -> &str { &self.new_password }
 }
+
+
+
+/*
+==================================================
+            Update user info packets
+==================================================
+*/
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PasswordUpdatePacket
+{
+    api_key: String,
+    user_jwt: String,
+    new_password: String
+}
+
+impl PasswordUpdatePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+    pub fn new_password(&self) -> &str { &self.new_password }
+}

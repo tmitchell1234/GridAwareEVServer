@@ -25,7 +25,7 @@ use std::env;
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, PasswordUpdatePacket, RegisterDevicePacket, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -621,7 +621,7 @@ pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Jso
         Ok(_) =>
         {
             // password updated successfully
-            println!("Password reset successfully in reset_password_code()!");
+            println!("Password reset successfully in reset_password_code() for user {}", reset_params.user_email());
             return HttpResponse::Ok().json("Password updated successfully!");
         },
         Err(e) =>
@@ -629,6 +629,71 @@ pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Jso
             println!("Error updating password in reset_password_code():");
             println!("{:?}", e);
             return HttpResponse::InternalServerError().json("Internal server error when updating password.");
+        }
+    }
+}
+
+
+
+
+/*
+============================================================================
+                Update user information endpoints
+            (for users that are logged in, must provide JWT)
+============================================================================
+*/
+
+
+pub async fn update_password(pool: web::Data<PgPool>, update_params: web::Json<PasswordUpdatePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_password: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // hash the new password and update the database
+    let hashed_password = hash_password(&update_params.new_password());
+
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_password = $1
+        WHERE
+        user_id = $2
+        "#,
+        hashed_password,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("Password updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_password: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating password, see server logs.");
         }
     }
 }
