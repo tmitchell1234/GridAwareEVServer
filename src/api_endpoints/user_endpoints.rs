@@ -25,7 +25,10 @@ use std::env;
                         CUSTOM MODULE IMPORTS
 ============================================================================
 */
-use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket, PasswordResetPacket, RegisterDevicePacket, UserLoginParams };
+use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket,
+                               PasswordResetPacket, PasswordUpdatePacket, RegisterDevicePacket,
+                               UpdateUserNamePacket, UpdateUserOrgPacket, UserDeletePacket,
+                               UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -235,12 +238,8 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
             // check the result of this query
             match user_device_check
             {
-                Ok(message) =>
-                {
-                    // query succeeded, do nothing and proceed to delete query
-                    println!("In unregister_device_user, result of user_device_check is:");
-                    println!("{:?}", message);
-                }
+                Ok(_) =>
+                { /* query succeeded, do nothing and proceed to delete query */ }
                 Err(e) =>
                 {
                     println!("Error in user_device_check: {}", e);
@@ -263,11 +262,7 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
             match remove_device_references
             {
                 Ok(message) =>
-                {
-                    // query succeeded, do nothing and progress to device table deletion
-                    println!("In unregister_device_user, reslut of measurement deletion is:");
-                    println!("{:?}", message);
-                }
+                { /* query succeeded, do nothing and progress to device table deletion */ }
                 Err (e) =>
                 {
                     println!("Error in remove_device_references: {}", e);
@@ -621,7 +616,7 @@ pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Jso
         Ok(_) =>
         {
             // password updated successfully
-            println!("Password reset successfully in reset_password_code()!");
+            println!("Password reset successfully in reset_password_code() for user {}", reset_params.user_email());
             return HttpResponse::Ok().json("Password updated successfully!");
         },
         Err(e) =>
@@ -629,6 +624,365 @@ pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Jso
             println!("Error updating password in reset_password_code():");
             println!("{:?}", e);
             return HttpResponse::InternalServerError().json("Internal server error when updating password.");
+        }
+    }
+}
+
+
+
+
+/*
+============================================================================
+                Update user information endpoints
+            (for users that are logged in, must provide JWT)
+============================================================================
+*/
+
+
+pub async fn update_password(pool: web::Data<PgPool>, update_params: web::Json<PasswordUpdatePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_password: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // hash the new password and update the database
+    let hashed_password = hash_password(&update_params.new_password());
+
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_password = $1
+        WHERE
+        user_id = $2
+        "#,
+        hashed_password,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("Password updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_password: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating password, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_first_name(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserNamePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_first_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their first name in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_first_name = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_name(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("First name updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_first_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_last_name(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserNamePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_last_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their last name in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_last_name = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_name(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("Last name updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_last_name: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
+        }
+    }
+}
+
+
+pub async fn update_user_organization(pool: web::Data<PgPool>, update_params: web::Json<UpdateUserOrgPacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), update_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // get the user's info from the database
+    let user_id = match decode_user_jwt(update_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_organization: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // update their organization in the database
+    let update_query = sqlx::query!(
+        r#"
+        UPDATE users
+        SET user_organization = $1
+        WHERE
+        user_id = $2
+        "#,
+        update_params.new_organization(),
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match update_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json("User organization updated successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in update_user_organization: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
+        }
+    }
+}
+
+
+
+pub async fn delete_user_account(pool: web::Data<PgPool>, delete_params: web::Json<UserDeletePacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), delete_params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // we don't want to (and in fact, cannot) delete users which have devices currently registered to their account.
+    // this would leave hanging foreign key references in the database, which Postgres does not allow.
+
+    // first, check if the user currently has any registered devices. 
+    // if yes, we need to reject this API request and inform them they must unregister all devices first.
+    // we also need to repeat this process for other tables which contain foreign key references.
+
+
+    // first, get the user's info from the database
+    let user_id = match decode_user_jwt(delete_params.user_jwt())
+    {
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
+        {
+            println!("Error decoding user JWT in update_user_organization: {:?}", e);
+            return HttpResponse::InternalServerError().json("Error decoding JWT, see server logs.");
+        }
+    };
+
+    // get and return list of devices from the database
+    let device_query = sqlx::query_as!(
+        Devices,
+        r#"
+        SELECT device_mac_address
+        FROM devices
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_all(pool.get_ref())
+    .await;
+
+
+    match device_query
+    {
+        Ok(result) =>
+        {
+            // check if the returned vector is empty.
+            // conversely, check if it returns any results.
+            if !result.is_empty()
+            {
+                return HttpResponse::BadRequest().json("Cannot delete user, they have devices registered. Unregister them first");
+            }
+
+            // otherwise, continue to the next step of the deletion process.
+        },
+        Err(e) =>
+        {
+            println!("Error querying database in delete_user_account(): {:?}", e);
+            return HttpResponse::InternalServerError().json("Server error querying database, check server logs.");
+        }
+    }
+
+
+    // user could also have foreign key references in "passwordcodes" password reset codes table.
+    // since the user needs to have a logged-in JWT to access this endpoint, they will not
+    // need these codes anymore. therefore, we simply delete any references in that table here.
+
+    let delete_reset_codes_query = sqlx::query!(
+        r#"
+        DELETE FROM passwordcodes
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match delete_reset_codes_query
+    {
+        Ok(_) =>
+        { /* do nothing, no action needed */},
+        Err(e) =>
+        {
+            println!("Error deleting password codes references in delete_user_account():");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Error deleting user, check server logs.");
+        }
+    }
+    
+
+
+    // TODO:
+    // in the future, a user /may/ have foreign key references in the "apikeys" table assigned to them.
+    // in the initial version of this project, we are assigning a small number of keys to
+    // generic users. this endpoint /will/ have to be refactored to delete these api keys
+    // in the future if and when this changes.
+
+    // for the sake of simplicity in the initial implementation, we ignore this step, since we know
+    // any normally registered users will not have a uniquely-assigned api key.
+    
+
+    // final step, all foreign key references cleared.
+    // delete the user from the "users" table.
+    let delete_query = sqlx::query!(
+        r#"
+        DELETE FROM users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match delete_query
+    {
+        Ok(_) =>
+        {
+            println!("User with id {} deleted successfully!", user_id);
+            return HttpResponse::Ok().json("Account deleted successfully!");
+        },
+        Err(e) =>
+        {
+            println!("Error in deletion query in delete_user_account():");
+            println!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Error deleting account, check server logs.");
         }
     }
 }
