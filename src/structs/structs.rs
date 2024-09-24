@@ -327,3 +327,19 @@ impl UpdateUserOrgPacket
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
     pub fn new_organization(&self) -> &str { &self.new_organization }
 }
+
+
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UserDeletePacket
+{
+    api_key: String,
+    user_jwt: String
+}
+
+impl UserDeletePacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+}
