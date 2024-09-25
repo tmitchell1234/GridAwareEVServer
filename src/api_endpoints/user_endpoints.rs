@@ -240,7 +240,7 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
     {
         Ok(_) =>
         { /* query succeeded, do nothing and proceed to delete query */ }
-        Err(e) =>
+        Err(_) =>
         {
             return HttpResponse::BadRequest().json("Device does not exist or is not assigned to user!");
         }
