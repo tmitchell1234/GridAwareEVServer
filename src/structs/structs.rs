@@ -346,3 +346,49 @@ impl UserDeletePacket
     pub fn api_key(&self) -> &str { &self.api_key }
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
 }
+
+
+
+/*
+==================================================
+            ADMIN RELATED PACKETS
+==================================================
+*/
+
+// for some system-level generic administrator
+// request that requires only an admin key
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminGenericPacket
+{
+    api_key: String
+}
+
+impl AdminGenericPacket
+{
+    pub fn api_key(&self) ->&str { &self.api_key }
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct DeviceList
+{
+    pub device_id: i32,
+    pub user_id: Option<i32>,
+    pub device_mac_address: Option<String>
+}
+
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminUserDevicePacket
+{
+    api_key: String,
+    user_id: i32,
+}
+
+impl AdminUserDevicePacket
+{
+    pub fn api_key(&self) ->&str { &self.api_key }
+    pub fn user_id(&self) ->&i32 { &self.user_id }
+}
