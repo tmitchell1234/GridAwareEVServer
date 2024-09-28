@@ -119,3 +119,47 @@ pub async fn get_user_with_credentials(pool: &PgPool, user_email: &str, hashed_p
 
     result
 }
+
+
+
+pub async fn validate_api_key_admin(pool: &PgPool, key: &str) -> Result< (), String>
+{
+    // // first, hash the key
+    let hashed_key = get_hashed_key(key);
+
+    // query the database for the API key
+    let key_query = sqlx::query!(
+        r#"
+        SELECT key_data, user_type
+        FROM apikeys
+        WHERE key_data = $1
+        "#,
+        hashed_key
+    )
+    .fetch_one(pool)
+    .await;
+
+    match key_query
+    {
+        Ok(result) =>
+        {
+            // check the ownership of the key, does it belong to an admin?
+            if result.user_type != "admin"
+            {
+                return Err(format!("Key does not belong to an administrator!"));
+            }
+            else
+            {
+                return Ok(());
+            }
+            
+        },
+        // 
+        Err(e) =>
+        {
+            println!("\nError in getting database result in validate_api_key_admin():");
+            println!("{:?}\n", e);
+            return Err(format!("API key validation failure!"));
+        }
+    }
+}
