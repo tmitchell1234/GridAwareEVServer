@@ -221,13 +221,13 @@ pub async fn get_data_report_for_day(pool: web::Data<PgPool>, query_packet: web:
     {
         Ok(measurements) =>
         {
-            HttpResponse::Ok().json(measurements)
+            return HttpResponse::Ok().json(measurements);
         }
         Err(e) =>
         {
             println!("Error querying DB in get_data_report_for_day...");
             println!("{:?}\n", e);
-            HttpResponse::InternalServerError().json("Error in querying database! Check server logs")
+            return HttpResponse::InternalServerError().json("Error in querying database! Check server logs");
         }
     }
 }

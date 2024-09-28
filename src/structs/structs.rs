@@ -111,6 +111,7 @@ pub struct SmartControllerPacket
     api_key: String,
     timestamp: String,
     mac_address: String,
+    is_charging: bool,
     frequency: f32,
     voltage: f32,
     current: f32,
@@ -121,6 +122,7 @@ impl SmartControllerPacket
     pub fn api_key(&self) -> &str { &self.api_key }
     pub fn timestamp(&self) -> &str { &self.timestamp }
     pub fn mac_address(&self) -> &str { &self.mac_address }
+    pub fn is_charging(&self) -> &bool { &self.is_charging }
     pub fn frequency(&self) -> &f32 { &self.frequency }
     pub fn voltage(&self) -> &f32 { &self.voltage }
     pub fn current(&self) -> &f32 { &self.current }
@@ -207,6 +209,7 @@ pub struct Measurements
     #[serde(with = "rfc3339")]
     pub time: OffsetDateTime,
     pub device_mac_address: String,
+    pub is_charging: bool,
     pub frequency: f32,
     pub voltage: f32,
     pub current: f32

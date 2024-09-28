@@ -71,12 +71,12 @@ pub async fn user_create(pool: web::Data<PgPool>, params: web::Json<NewUserParam
     .await;
 
     match query {
-        Ok(_) => HttpResponse::Ok().json("User created successfully"),
+        Ok(_) => { return HttpResponse::Ok().json("User created successfully"); },
         Err(e) => {
             eprintln!("Failed to create user: {}", e);
-            HttpResponse::InternalServerError().json("Failed to create user")
+            return HttpResponse::InternalServerError().json("Failed to create user");
         }
-    }
+    };
 }
 
 
@@ -102,18 +102,18 @@ pub async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginPara
         Ok(user) => {
             // create and return JWT
             let return_jwt = create_jwt(&user);
-            // println!("Generated JWT = {}", return_jwt);
-            HttpResponse::Ok().json(web::Json(json!({ "token": return_jwt })))
+
+            return HttpResponse::Ok().json( web::Json(json!({ "token": return_jwt })) );
 
         },
         Err(sqlx::Error::RowNotFound) => {
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Incorrect email or password!"})))
+            return HttpResponse::BadRequest().json(web::Json( json!({ "error": "Incorrect email or password!"})) );
         },
         Err(e) => {
-            println!("{:?}", e);
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Some other error occured, see server stack trace" })))
+            eprintln!("{:?}", e);
+            return HttpResponse::BadRequest().json( web::Json(json!({ "error": "Some other error occured, see server stack trace" })) );
         }
-    }
+    };
 }
 
 
@@ -132,69 +132,68 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
         { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
-
-    // decode user jwt to get their user_id
-    match decode_user_jwt(register_params.user_jwt())
+    let user_id: i32 = match decode_user_jwt(register_params.user_jwt())
     {
-        Ok(user_data_packet) =>
-        {
-            let user_data = user_data_packet.claims;
-
-            // now store it in the devices table
-            let result = sqlx::query!(
-                r#"
-                INSERT INTO devices ( user_id, device_mac_address )
-                VALUES ($1, $2)
-                "#,
-                user_data.user_id,
-                register_params.device_mac_address()
-            )
-            .execute(pool.get_ref())
-            .await;
-
-            match result
-            {
-                Ok(message) =>
-                {
-                    println!("Entered device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
-                    HttpResponse::Ok().json("Device with mac address registered successfully!")
-                }
-                
-                Err(sqlx::Error::Database(database_error)) =>
-                {
-                    // attempt to parse if the devie was already registered.
-                    // (violates unique mac address contraints)
-                    if let Some(postgres_error) = database_error.try_downcast_ref::<PgDatabaseError>()
-                    {
-                        if postgres_error.code() == "23505" {
-                            HttpResponse::BadRequest().json("Error, device with given mac address is already registered!")
-                        }
-                        else {
-                            println!("{}", database_error);
-                            HttpResponse::BadRequest().json("Error, database insertion failed. See server stack trace for more info.")
-                        }
-                    }
-                    
-                    else {
-                        println!("{}", database_error);
-                        HttpResponse::BadRequest().json("Error, database insertion failed. See server stack trace for more info.")
-                    }
-                }
-
-                // some other weird error occurred
-                Err(e) =>
-                {
-                    println!("Other error in register_device: {}", e);
-                    HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.")
-                }
-            }
-        }
+        Ok(user_data_packet) => user_data_packet.claims.user_id,
         Err(e) =>
         {
-            println!("Failed to decode JWT: {}", e);
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+            eprintln!("Failed to decode JWT: {}", e);
+            return HttpResponse::BadRequest().json( web::Json(json!({ "error": "Invalid or expired JWT given." })) );
         }
-    }
+    };
+
+    // now store it in the devices table
+    let insert_query = sqlx::query!(
+        r#"
+        INSERT INTO devices ( user_id, device_mac_address )
+        VALUES ($1, $2)
+        "#,
+        user_id,
+        register_params.device_mac_address()
+    )
+    .execute(pool.get_ref())
+    .await;
+
+    match insert_query
+    {
+        Ok(message) =>
+        {
+            println!("Entered device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
+            return HttpResponse::Ok().json("Device with mac address registered successfully!");
+        },
+
+        Err(sqlx::Error::Database(database_error)) =>
+        {
+            // attempt to parse if the devie was already registered.
+            // (violates unique mac address contraints)
+            if let Some(postgres_error) = database_error.try_downcast_ref::<PgDatabaseError>()
+            {
+                if postgres_error.code() == "23505"
+                {
+                    return HttpResponse::BadRequest().json("Error, device with given mac address is already registered!")
+                }
+                else
+                {
+                    eprintln!("{}", database_error);
+                    return HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.");
+                }
+            }
+                    
+            else
+            {
+                eprintln!("{}", database_error);
+                return HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.")
+            }
+        },
+
+        // some other weird error occurred
+        Err(e) =>
+        {
+            eprintln!("Other error in register_device: {}", e);
+            return HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.");
+        }
+
+    };
 }
 
 
@@ -213,95 +212,88 @@ pub async fn unregister_device_by_user(pool: web::Data<PgPool>, register_params:
         { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
-
     // decode user jwt to get their user_id
-    match decode_user_jwt(register_params.user_jwt())
+    let user_id: i32 = match decode_user_jwt(register_params.user_jwt())
     {
-        Ok(user_data_packet) =>
-        {
-            let user_data = user_data_packet.claims;
-
-            // first, check if the device actually belongs to the given user
-            let user_device_check = sqlx::query!(
-                r#"
-                SELECT user_id, device_mac_address
-                FROM devices
-                WHERE user_id = $1 AND device_mac_address = $2
-                "#,
-                user_data.user_id,
-                register_params.device_mac_address()
-            )
-            .fetch_one(pool.get_ref())
-            .await;
-
-
-            // check the result of this query
-            match user_device_check
-            {
-                Ok(_) =>
-                { /* query succeeded, do nothing and proceed to delete query */ }
-                Err(e) =>
-                {
-                    println!("Error in user_device_check: {}", e);
-                    return HttpResponse::BadRequest().json("Bad request: user not associated with device!");
-                }
-            }
-
-            // next, delete all references to device_mac_address in measurements table
-            let remove_device_references = sqlx::query!(
-                r#"
-                DELETE FROM measurements
-                WHERE device_mac_address = $1
-                "#,
-                register_params.device_mac_address()
-            )
-            .execute(pool.get_ref())
-            .await;
-
-            // check that measurements deletion worked
-            match remove_device_references
-            {
-                Ok(message) =>
-                { /* query succeeded, do nothing and progress to device table deletion */ }
-                Err (e) =>
-                {
-                    println!("Error in remove_device_references: {}", e);
-                    return HttpResponse::InternalServerError().json("Server error, unable to remove device references in measurements table!");
-                }
-            }
-
-            // now remove from the devices table
-            let result = sqlx::query!(
-                r#"
-                DELETE FROM devices
-                WHERE user_id = $1 AND device_mac_address = $2
-                "#,
-                user_data.user_id,
-                register_params.device_mac_address()
-            )
-            .execute(pool.get_ref())
-            .await;
-
-            match result
-            {
-                Ok(message) =>
-                {
-                    println!("Removed device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
-                    HttpResponse::Ok().json("Device with mac address removed successfully!")
-                }
-
-                // some other weird error occurred
-                Err(e) =>
-                {
-                    println!("Other error in unregister_device_user: {}", e);
-                    HttpResponse::InternalServerError().json("Error, database deletion failed. Device is not registered or not associated with given user.")
-                }
-            }
-        }
+        Ok(user) => user.claims.user_id,
         Err(e) =>
         {
-            println!("Failed to decode JWT: {}", e);
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+            eprintln!("Failed to decode JWT: {}", e);
+            return HttpResponse::BadRequest().json( web::Json(json!({ "error": "Invalid or expired JWT given." })) );
+        }
+    };
+
+    // first, check if the device actually belongs to the given user
+    let user_device_check = sqlx::query!(
+        r#"
+        SELECT user_id, device_mac_address
+        FROM devices
+        WHERE user_id = $1 AND device_mac_address = $2
+        "#,
+        user_id,
+        register_params.device_mac_address()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    match user_device_check
+    {
+        Ok(_) =>
+        { /* query succeeded, do nothing and proceed to delete query */ }
+        Err(_) =>
+        {
+            return HttpResponse::BadRequest().json("Device does not exist or is not assigned to user!");
+        }
+    }
+
+    // next, delete all references to device_mac_address in measurements table
+    let remove_device_query = sqlx::query!(
+        r#"
+        DELETE FROM measurements
+        WHERE device_mac_address = $1
+        "#,
+        register_params.device_mac_address()
+    )
+    .execute(pool.get_ref())
+    .await;
+
+    // check that measurements deletion worked
+    match remove_device_query
+    {
+        Ok(_) =>
+        { /* query succeeded, do nothing and progress to device table deletion */ }
+        Err (e) =>
+        {
+            println!("Error in remove_device_query: {}", e);
+            return HttpResponse::InternalServerError().json("Server error, unable to remove device references in measurements table!");
+        }
+    }
+
+    // now remove from the devices table
+    let remove_device_query = sqlx::query!(
+        r#"
+        DELETE FROM devices
+        WHERE user_id = $1 AND device_mac_address = $2
+        "#,
+        user_id,
+        register_params.device_mac_address()
+    )
+    .execute( pool.get_ref() )
+    .await;
+
+    match remove_device_query
+    {
+        Ok(message) =>
+        {
+            println!("Removed device with mac address {} successfully! {:?}", register_params.device_mac_address(), message);
+            return HttpResponse::Ok().json("Device with mac address removed successfully!");
+        },
+
+        // some other error occurred
+        Err(e) =>
+        {
+            println!("Other error in unregister_device_user: {}", e);
+            return HttpResponse::InternalServerError().json("Error, database deletion failed. Device is not registered or not associated with given user.");
         }
     }
 }
@@ -321,51 +313,46 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
         { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
-
-    // decode user jwt to get their user_id
-    match decode_user_jwt(device_query_params.user_jwt())
+    let user_id: i32 = match decode_user_jwt( device_query_params.user_jwt() )
     {
-        Ok(user_data_packet) =>
+        Ok(user) => user.claims.user_id,
+        Err(e) =>
         {
-            let user_id = user_data_packet.claims.user_id;
-
-            // get and return list of devices from the database
-            let result = sqlx::query_as!(
-                Devices,
-                r#"
-                SELECT device_mac_address
-                FROM devices
-                WHERE user_id = $1
-                "#,
-                user_id
-            )
-            .fetch_all(pool.get_ref())
-            .await;
-            
-            println!("Got list of devices successfully!");
-            println!("{:?}", result);
-
-            match result
-            {
-                Ok(device_list) =>
-                {
-                    HttpResponse::Ok().json(device_list)
-                }
-                Err(e) =>
-                {
-                    println!("Error querying DB in get_devices...");
-                    println!("{:?}\n", e);
-                    HttpResponse::InternalServerError().json("Error querying database! Check server stack trace.")
-                }
-            }
+            eprintln!("Failed to decode JWT: {}", e);
+            return HttpResponse::BadRequest().json( web::Json(json!({ "error": "Invalid or expired JWT given." })) );
         }
-        Err (e) =>
+    };
+
+
+    // get and return list of devices from the database
+    let device_query = sqlx::query_as!(
+        Devices,
+        r#"
+        SELECT device_mac_address
+        FROM devices
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_all(pool.get_ref())
+    .await;
+
+    println!("Got list of devices successfully!");
+    println!("{:?}", device_query);
+
+    match device_query
+    {
+        Ok(device_list) =>
         {
-            println!("Failed to decode JWT: {}", e);
-            HttpResponse::BadRequest().json(web::Json(json!({ "error": "Invalid or expired JWT given." })))
+            return HttpResponse::Ok().json(device_list);
+        }
+        Err(e) =>
+        {
+            eprintln!("Error querying DB in get_devices_for_user():");
+            eprintln!("{:?}\n", e);
+            return HttpResponse::InternalServerError().json("Error querying database, check server logs.")
         }
     }
-    // HttpResponse::Ok()
 }
 
 
