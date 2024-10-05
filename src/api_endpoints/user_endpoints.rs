@@ -132,6 +132,9 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
         { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
+
+    
+
     let user_id: i32 = match decode_user_jwt(register_params.user_jwt())
     {
         Ok(user_data_packet) => user_data_packet.claims.user_id,
