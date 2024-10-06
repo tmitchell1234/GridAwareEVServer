@@ -117,7 +117,6 @@ pub async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginPara
 }
 
 
-
 // register device by user
 pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket> ) -> impl Responder
 {
@@ -132,8 +131,6 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
         { return HttpResponse::BadRequest().json("Invalid key!"); }
     }
 
-
-    
 
     let user_id: i32 = match decode_user_jwt(register_params.user_jwt())
     {
@@ -195,7 +192,6 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
             eprintln!("Other error in register_device: {}", e);
             return HttpResponse::InternalServerError().json("Error, database insertion failed. See server stack trace for more info.");
         }
-
     };
 }
 
@@ -440,8 +436,6 @@ pub async fn reset_password_email(pool: web::Data<PgPool>, reset_params: web::Js
     }
 
 
-
-
     // build the sendgrid email and send it to the user with the generated code.
     // load environment variables for sendgrid api key:
     dotenv().ok();
@@ -617,8 +611,6 @@ pub async fn reset_password_code(pool: web::Data<PgPool>, reset_params: web::Jso
         }
     }
 }
-
-
 
 
 /*
