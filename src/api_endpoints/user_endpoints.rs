@@ -27,8 +27,8 @@ use std::env;
 */
 use crate::structs::structs::{ DeviceQueryPacket, Devices, NewUserParams, PasswordResetCodePacket,
                                PasswordResetPacket, PasswordUpdatePacket, RegisterDevicePacket,
-                               UpdateUserNamePacket, UpdateUserOrgPacket, UserDeletePacket,
-                               UserLoginParams };
+                               UpdateUserNamePacket, UpdateUserOrgPacket, User, UserDeletePacket,
+                               UserInfoQuery, UserLoginParams };
 
 use crate::helper_functions::helper_functions::{ create_jwt, decode_user_jwt, hash_password, get_user_with_credentials, validate_api_key };
 
@@ -114,6 +114,46 @@ pub async fn user_login(pool: web::Data<PgPool>, params: web::Json<UserLoginPara
             return HttpResponse::BadRequest().json( web::Json(json!({ "error": "Some other error occured, see server stack trace" })) );
         }
     };
+}
+
+
+/*
+============================================================================
+                Get user's information based on
+            database records and their provided JWT
+============================================================================
+*/
+pub async fn get_user_info(pool: web::Data<PgPool>, params: web::Json<UserInfoQuery>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), params.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(_e) =>
+        { return HttpResponse::BadRequest().json("Invalid key!"); }
+    }
+
+    // decode and retrieve the user's information based on the provided JWT
+    let user_info = decode_user_jwt(&params.user_jwt());
+
+    match user_info
+    {
+        Ok(user) =>
+        {
+            println!("Decoded user_info is:");
+            println!("{:?}", user.claims);
+            return HttpResponse::Ok().json(user.claims);
+        },
+        Err(e) =>
+        {
+            eprintln!("Error decoding JWT in get_user_info():");
+            eprintln!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Internal server error, check server stack trace.");
+        }
+    }
 }
 
 
@@ -718,14 +758,44 @@ pub async fn update_user_first_name(pool: web::Data<PgPool>, update_params: web:
     {
         Ok(_) =>
         {
-            return HttpResponse::Ok().json("First name updated successfully!");
+            /* update succeeded, proceed to new JWT generation */
         },
         Err(e) =>
         {
-            println!("Error querying database in update_user_first_name: {:?}", e);
+            eprintln!("Error querying database in update_user_first_name: {:?}", e);
             return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
         }
     }
+
+    // encode and return a new JWT
+    let new_user_info = sqlx::query_as!(
+        User,
+        r#"SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization
+        FROM Users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    let user;
+
+    match new_user_info
+    {
+        Ok(retrieved_user) => { user = retrieved_user },
+        Err(e) =>
+        {
+            eprintln!("Error getting new user info from DB in update_user_first_name():");
+            eprintln!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Server error, see server stack trace.");
+        }
+    }
+
+    // encode and return their information as a new JWT
+    let encoded_jwt = create_jwt(&user);
+
+    return HttpResponse::Ok().json( web::Json(json!({ "token": encoded_jwt })) );
 }
 
 
@@ -770,15 +840,43 @@ pub async fn update_user_last_name(pool: web::Data<PgPool>, update_params: web::
     match update_query
     {
         Ok(_) =>
-        {
-            return HttpResponse::Ok().json("Last name updated successfully!");
-        },
+        { /* update succeeded, proceed to new JWT generation */ },
         Err(e) =>
         {
             println!("Error querying database in update_user_last_name: {:?}", e);
             return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
         }
     }
+
+    // encode and return a new JWT
+    let new_user_info = sqlx::query_as!(
+        User,
+        r#"SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization
+        FROM Users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    let user;
+
+    match new_user_info
+    {
+        Ok(retrieved_user) => { user = retrieved_user },
+        Err(e) =>
+        {
+            eprintln!("Error getting new user info from DB in update_user_first_name():");
+            eprintln!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Server error, see server stack trace.");
+        }
+    }
+
+    // encode and return their information as a new JWT
+    let encoded_jwt = create_jwt(&user);
+
+    return HttpResponse::Ok().json( web::Json(json!({ "token": encoded_jwt })) );
 }
 
 
@@ -823,15 +921,43 @@ pub async fn update_user_organization(pool: web::Data<PgPool>, update_params: we
     match update_query
     {
         Ok(_) =>
-        {
-            return HttpResponse::Ok().json("User organization updated successfully!");
-        },
+        { /* update succeeded, proceed to new JWT generation */ },
         Err(e) =>
         {
             println!("Error querying database in update_user_organization: {:?}", e);
             return HttpResponse::InternalServerError().json("Error updating name, see server logs.");
         }
     }
+
+    // encode and return a new JWT
+    let new_user_info = sqlx::query_as!(
+        User,
+        r#"SELECT user_id, user_type, user_email, user_first_name, user_last_name, user_organization
+        FROM Users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    let user;
+
+    match new_user_info
+    {
+        Ok(retrieved_user) => { user = retrieved_user },
+        Err(e) =>
+        {
+            eprintln!("Error getting new user info from DB in update_user_first_name():");
+            eprintln!("{:?}", e);
+            return HttpResponse::InternalServerError().json("Server error, see server stack trace.");
+        }
+    }
+
+    // encode and return their information as a new JWT
+    let encoded_jwt = create_jwt(&user);
+
+    return HttpResponse::Ok().json( web::Json(json!({ "token": encoded_jwt })) );
 }
 
 
