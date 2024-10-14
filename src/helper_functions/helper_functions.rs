@@ -40,7 +40,7 @@ pub fn create_jwt(user_info: &User) -> String
     let token = encode(&Header::new(Algorithm::HS256), &user_info, &EncodingKey::from_secret(&key_bytestring))
         .expect("Failed to encode token in create_jwt()!");
 
-    println!("\nCreated JWT: {}\n", token);
+    // println!("\nCreated JWT: {}\n", token);
     return token;
 }
 

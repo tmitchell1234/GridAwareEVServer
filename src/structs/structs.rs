@@ -98,6 +98,21 @@ impl UserLoginParams
     pub fn user_email(&self) -> &str { &self.user_email }
 }
 
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UserInfoQuery
+{
+    api_key: String,
+    user_jwt: String
+}
+
+impl UserInfoQuery
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn user_jwt(&self) -> &str { &self.user_jwt }
+}
+
 /*
 ==================================================
             SMART CONTROLLER PACKETS

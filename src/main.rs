@@ -27,7 +27,7 @@ use std::env;
 mod structs;
 mod helper_functions;
 mod api_endpoints;
-use crate::api_endpoints::user_endpoints::{ delete_user_account, get_devices_for_user, register_device,
+use crate::api_endpoints::user_endpoints::{ delete_user_account, get_devices_for_user, get_user_info, register_device,
                                             unregister_device_by_user, reset_password_code, reset_password_email,
                                             update_password, update_user_first_name, update_user_last_name,
                                             update_user_organization, user_create, user_login };
@@ -73,6 +73,7 @@ async fn main() -> std::io::Result<()> {
             .route("/get_data_in_recent_time_interval", web::post().to( get_data_in_recent_time_interval ))
             .route("/get_data_report_for_day", web::post().to( get_data_report_for_day ))
             .route("/get_devices_for_user", web::post().to( get_devices_for_user ))
+            .route("/get_user_info", web::post().to( get_user_info ))
             .route("/register_device", web::post().to( register_device ))
             .route("/unregister_device_by_user", web::post().to( unregister_device_by_user ))
             .route("/reset_password_code", web::post().to( reset_password_code ))
