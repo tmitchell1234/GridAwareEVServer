@@ -10,7 +10,7 @@
                         LIBRARY (CRATE) IMPORTS
 ============================================================================
 */
-use actix_web::{web, HttpResponse, Responder };
+use actix_web::{web, HttpRequest, HttpResponse, Responder };
 use dotenvy::dotenv;
 use rand::Rng;
 use reqwest::Client;
@@ -158,7 +158,7 @@ pub async fn get_user_info(pool: web::Data<PgPool>, params: web::Json<UserInfoQu
 
 
 // register device by user
-pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json<RegisterDevicePacket> ) -> impl Responder
+pub async fn register_device(pool: web::Data<PgPool>, req: HttpRequest, register_params: web::Json<RegisterDevicePacket> ) -> impl Responder
 {
     // first, validate the given API key
     let result = validate_api_key(pool.as_ref(), register_params.api_key()).await;
@@ -182,14 +182,25 @@ pub async fn register_device(pool: web::Data<PgPool>, register_params: web::Json
         }
     };
 
+
+    // parse the IP address which the POST request came from, so we can assign
+    // an IP address (and subsequently, a physical location) to the device
+    let connection_info = req.connection_info();
+
+    let client_ip = connection_info.realip_remote_addr().unwrap_or("Unknown");
+
+    //println!("Parsed IP = {}", client_ip);
+    
+
     // now store it in the devices table
     let insert_query = sqlx::query!(
         r#"
-        INSERT INTO devices ( user_id, device_mac_address )
-        VALUES ($1, $2)
+        INSERT INTO devices ( user_id, device_mac_address, ip_address )
+        VALUES ($1, $2, $3)
         "#,
         user_id,
-        register_params.device_mac_address()
+        register_params.device_mac_address(),
+        client_ip
     )
     .execute(pool.get_ref())
     .await;
@@ -367,7 +378,7 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
     let device_query = sqlx::query_as!(
         Devices,
         r#"
-        SELECT device_mac_address
+        SELECT device_mac_address, ip_address
         FROM devices
         WHERE user_id = $1
         "#,
@@ -376,8 +387,8 @@ pub async fn get_devices_for_user(pool: web::Data<PgPool>, device_query_params: 
     .fetch_all(pool.get_ref())
     .await;
 
-    println!("Got list of devices successfully!");
-    println!("{:?}", device_query);
+    // println!("Got list of devices successfully!");
+    // println!("{:?}", device_query);
 
     match device_query
     {
@@ -998,7 +1009,7 @@ pub async fn delete_user_account(pool: web::Data<PgPool>, delete_params: web::Js
     let device_query = sqlx::query_as!(
         Devices,
         r#"
-        SELECT device_mac_address
+        SELECT device_mac_address, ip_address
         FROM devices
         WHERE user_id = $1
         "#,

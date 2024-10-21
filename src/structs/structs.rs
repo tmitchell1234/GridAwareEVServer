@@ -191,7 +191,8 @@ impl DeviceQueryPacket
 #[derive(Debug, Serialize)]
 pub struct Devices
 {
-    pub device_mac_address: Option<String>
+    pub device_mac_address: Option<String>,
+    pub ip_address: String
 }
 
 /*
