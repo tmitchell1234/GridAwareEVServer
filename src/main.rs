@@ -32,7 +32,7 @@ use crate::api_endpoints::user_endpoints::{ delete_user_account, get_devices_for
                                             update_password, update_user_first_name, update_user_last_name,
                                             update_user_organization, user_create, user_login };
 
-use crate::api_endpoints::device_endpoints::store_controller_reading;
+use crate::api_endpoints::device_endpoints::{ check_exists, store_controller_reading };
 use crate::api_endpoints::data_queries::{ get_data_in_recent_time_interval, get_data_report_for_day };
 
 use crate::api_endpoints::admin_endpoints::{ admin_get_all_devices, admin_get_all_users, admin_get_devices_for_user,
@@ -69,6 +69,7 @@ async fn main() -> std::io::Result<()> {
             .route("/admin_get_devices_for_user", web::post().to( admin_get_devices_for_user ))
 
             // user/device endpoints
+            .route("/check_exists", web::post().to( check_exists ))
             .route("/delete_user_account", web::post().to( delete_user_account ))
             .route("/get_data_in_recent_time_interval", web::post().to( get_data_in_recent_time_interval ))
             .route("/get_data_report_for_day", web::post().to( get_data_report_for_day ))
