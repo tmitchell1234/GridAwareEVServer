@@ -10,8 +10,9 @@
                         LIBRARY (CRATE) IMPORTS
 ============================================================================
 */
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{ web, HttpResponse, Responder };
 use chrono::{ DateTime, Utc };
+use serde_json::json;
 use sqlx::postgres::PgPool;
 use std::time::SystemTime;
 use time::OffsetDateTime;
@@ -22,7 +23,7 @@ use time::OffsetDateTime;
 ============================================================================
 */
 use crate::helper_functions::helper_functions::validate_api_key;
-use crate::structs::structs::SmartControllerPacket;
+use crate::structs::structs::{ DeviceCheckPacket, SmartControllerPacket };
 
 
 /*
@@ -75,6 +76,48 @@ pub async fn store_controller_reading(pool: web::Data<PgPool>, controller_packet
         Err(e) => {
             eprintln!("Failed to enter smart controller package {}", e);
             HttpResponse::InternalServerError().json("Failed to enter smart controller package!")
+        }
+    }
+}
+
+
+// used by smart controller devices to periodically check if they are still registered.
+// if not, the controller will stop it's routine of sending data packets to the server,
+// erase it's wifi credentials, and await the next mobile app connection for setup.
+pub async fn check_exists(pool: web::Data<PgPool>, controller_packet: web::Json<DeviceCheckPacket>) -> impl Responder
+{
+    // first, validate the given API key
+    let result = validate_api_key(pool.as_ref(), controller_packet.api_key()).await;
+
+    match result
+    {
+        Ok(()) =>
+        { /*  do nothing - key check passed */ }
+        Err(e) =>
+        { return HttpResponse::BadRequest().json(e); }
+    }
+
+    // check that the device exists in the devices table
+    let check_query = sqlx::query!(
+        r#"
+        SELECT *
+        FROM devices
+        WHERE device_mac_address = $1
+        "#,
+        controller_packet.device_mac_address()
+    )
+    .fetch_one( pool.get_ref() )
+    .await;
+
+    match check_query
+    {
+        Ok(_) =>
+        {
+            return HttpResponse::Ok().json( web::Json(json!({ "exists": true })) );
+        },
+        Err(_e) =>
+        {
+            return HttpResponse::BadRequest().json( web::Json(json!({ "exists": false})) );
         }
     }
 }

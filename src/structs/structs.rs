@@ -348,7 +348,6 @@ impl UpdateUserOrgPacket
 }
 
 
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UserDeletePacket
@@ -363,6 +362,30 @@ impl UserDeletePacket
     pub fn user_jwt(&self) -> &str { &self.user_jwt }
 }
 
+
+/*
+==================================================
+            VERIFY DEVICE PACKET
+==================================================
+*/
+
+// used only by devices to periodically check if they are still registered.
+// this is a workaround solution due to our current setup and
+// bluetooth communications being generally janky between the
+// mobile app and ESP32.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeviceCheckPacket
+{
+    api_key: String,
+    device_mac_address: String
+}
+
+impl DeviceCheckPacket
+{
+    pub fn api_key(&self) -> &str { &self.api_key }
+    pub fn device_mac_address(&self) -> &str { &self.device_mac_address }
+}
 
 
 /*
