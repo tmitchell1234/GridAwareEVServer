@@ -99,7 +99,7 @@ pub async fn get_data_in_recent_time_interval(pool: web::Data<PgPool>, query_pac
         WHERE 
         device_mac_address = $1
         AND
-        time >= NOW() - INTERVAL '4 hours' - $2 * INTERVAL '1 second';
+        time >= NOW() - INTERVAL '5 hours' - $2 * INTERVAL '1 second';
         "#,
         query_packet.device_mac_address(),
         query_packet.time_seconds()
