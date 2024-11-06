@@ -130,6 +130,7 @@ pub struct SmartControllerPacket
     frequency: f32,
     voltage: f32,
     current: f32,
+    battery_percentage: f32
 }
 
 impl SmartControllerPacket
@@ -141,6 +142,7 @@ impl SmartControllerPacket
     pub fn frequency(&self) -> &f32 { &self.frequency }
     pub fn voltage(&self) -> &f32 { &self.voltage }
     pub fn current(&self) -> &f32 { &self.current }
+    pub fn battery_percentage(&self) -> &f32 { &self.battery_percentage }
 }
 
 
@@ -228,7 +230,8 @@ pub struct Measurements
     pub is_charging: bool,
     pub frequency: f32,
     pub voltage: f32,
-    pub current: f32
+    pub current: f32,
+    pub battery_percentage: f32
 }
 
 #[derive(Deserialize)]
