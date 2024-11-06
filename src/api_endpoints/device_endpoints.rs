@@ -70,7 +70,7 @@ pub async fn store_controller_reading(pool: web::Data<PgPool>, controller_packet
     .execute(pool.get_ref())
     .await;
 
-    println!("\nInserted data into measurements time series table!\n");
+    // println!("\nInserted data into measurements time series table!\n");
 
     match result {
         Ok(_) => HttpResponse::Ok().json("Smart controller package entered successfully!"),
