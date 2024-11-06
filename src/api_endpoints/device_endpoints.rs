@@ -56,15 +56,16 @@ pub async fn store_controller_reading(pool: web::Data<PgPool>, controller_packet
 
     let result = sqlx::query!(
         r#"
-        INSERT INTO measurements (time, device_mac_address, is_charging, frequency, voltage, current)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO measurements (time, device_mac_address, is_charging, frequency, voltage, current, battery_percentage)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
         time_offset,
         controller_packet.mac_address(),
         controller_packet.is_charging(),
         controller_packet.frequency(),
         controller_packet.voltage(),
-        controller_packet.current()
+        controller_packet.current(),
+        controller_packet.battery_percentage()
     )
     .execute(pool.get_ref())
     .await;
